@@ -1,0 +1,209 @@
+# ---------------------------------------------------------------------------
+# New Project Proposal (New Initiative track) — generation guide
+#
+# Matches doc_templates/project_proposal.docx exactly, sourced from the real
+# D:\PM360\Project_Proposal_Template.docx (2026-09-10).
+#
+# This template's section titles ("1.  EXECUTIVE SUMMARY", "2.  STRATEGIC
+# FIT", ...) are hand-bolded lines in the document's default paragraph
+# style, not Word's built-in Heading styles - app/docx_engine.py's
+# TemplateDoc detects this (no Heading-styled paragraph anywhere in the
+# document) and falls back to treating a bold, short line as a heading, so
+# the heading text below works exactly like it would for a template built
+# with real Heading styles.
+#
+# Every content section here is either a `textbox` (a single-cell "bordered
+# box" table the template itself calls out as the narrative writing area -
+# "Sections with a bordered box are narrative — write directly inside") or a
+# `key_value`/`list` table ("Sections with tables are structured data").
+# There is no open bulleted-list section anywhere in this template.
+#
+# Deliberately NOT generated, left exactly as the template has them:
+#   - The Implementation Mode checkbox table (a selection the proposing team
+#     makes, not content to draft).
+#   - The Quick Reference Due Diligence/Capacity self-check checklists (an
+#     honest self-assessment by the proposing team, not something an AI
+#     draft should tick on their behalf).
+#   - Section A, the Reviewer Scoring Rubric, and the Gate Decision box -
+#     completed by reviewers at the Proposal Review gate, not the proposing
+#     team. Same principle as never filling in a signature table.
+#   - Annexures (a checklist of what is physically attached to the
+#     submission - nothing here for a draft to state truthfully yet).
+# ---------------------------------------------------------------------------
+
+id: project_proposal
+name: Project Proposal
+version: "1.0"
+description: >-
+  Vibha's real New Initiative proposal template: the written case a
+  Programme Team prepares for the Proposal Review gate. 15 sections plus a
+  Partner Details table where a partnership implementation mode applies.
+docx_template: project_proposal.docx
+
+batches:
+  - id: cover_and_summary
+    title: Cover details and executive summary
+    blocks: [cover, executive_summary, strategic_fit]
+  - id: context_and_partner
+    title: Partner details, context and needs
+    blocks: [partner_details, context, situation_needs, problem_tree]
+  - id: design
+    title: Theory of change and design
+    blocks: [theory_of_change, design_overview, stakeholder_fit]
+  - id: delivery
+    title: Feasibility, measurement and resourcing
+    blocks: [feasibility, meal_plan, budget]
+  - id: risk_and_ask
+    title: Risk, scale and the ask
+    blocks: [risk, scale_exit, decision_requested]
+
+sections:
+  - id: cover
+    heading: Cover Details
+    kind: cover
+    fields: ["Project / Initiative Name", "Proposing Team & Lead", "Region(s) Covered", "Date Submitted", "Requested Decision Date"]
+    guidance: >-
+      Project / Initiative Name is short and specific. Proposing Team & Lead
+      names the team and lead if the description gives one, otherwise "Impact
+      Programs Team". Date Submitted is today; Requested Decision Date is
+      2-4 weeks out unless the description states urgency.
+    framework_query: "project identification"
+
+  - id: executive_summary
+    heading: Executive Summary
+    kind: textbox
+    guidance: >-
+      One paragraph: what is being proposed, why now, and what decision is
+      being asked of leadership. Written last, read first - assume the
+      reader has read nothing else.
+    framework_query: "project rationale mission alignment expected value"
+
+  - id: strategic_fit
+    heading: Strategic Fit
+    kind: textbox
+    guidance: >-
+      One paragraph: how this initiative advances Educate / Empower /
+      Enable, and which organisational priority or gap it responds to.
+    framework_query: "strategic fit educate empower enable philosophy"
+
+  - id: partner_details
+    heading: "Partner Details (complete if a partnership mode is selected)"
+    kind: key_value
+    fields: ["Partner organisation name", "Partner's role & scope", "Due diligence status", "Capacity assessment status", "Agreement / MoU status", "MEL clauses in grant/partnership agreement"]
+    guidance: >-
+      Only fill this if the description names or implies a delivery partner;
+      otherwise leave every field as "Not applicable — direct implementation".
+      Due diligence / capacity assessment status is "not started" unless the
+      description says otherwise - never claim complete without evidence.
+    framework_query: "partner due diligence capacity assessment partnership readiness"
+
+  - id: context
+    heading: Context of Intervention
+    kind: key_value
+    fields: ["Geography & thematic area", "Vibha's existing presence here", "Other actors working in this space", "Relevant policy or institutional context"]
+    guidance: Background, not argument - the setting this proposal operates in, before making the case for the intervention itself.
+    framework_query: "geography thematic area existing programme presence"
+
+  - id: situation_needs
+    heading: Situation & Needs Assessment
+    kind: key_value
+    fields: ["Assessment method", "Primary evidence source(s)", "Core problem identified", "Who is affected, and how"]
+    guidance: >-
+      This must read as a formally conducted assessment, not a conversation -
+      name the method (e.g. problem-tree analysis, field survey, secondary
+      data review) and a named evidence source, never "conversations" alone.
+    framework_query: "evidence of need situation analysis assessment method"
+
+  - id: problem_tree
+    heading: "Problem-Tree Summary"
+    kind: list
+    columns: ["Root Causes", "Core Problem", Effects]
+    count: [1, 2]
+    guidance: One row is enough unless there are genuinely two distinct root-cause chains. Core Problem should be the same across rows.
+    framework_query: "root cause analysis problem tree"
+
+  - id: theory_of_change
+    heading: "Theory of Change / Program Logic"
+    kind: list
+    columns: [Inputs, Activities, Outputs, Outcomes, Impact]
+    count: [1, 2]
+    guidance: >-
+      Must be causally coherent: each column should genuinely lead to the
+      next, not restate the one before it. One row is usually enough for a
+      single, clear logic chain.
+    framework_query: "theory of change programme logic inputs outputs outcomes impact"
+
+  - id: design_overview
+    heading: Design Overview
+    kind: list
+    columns: ["Phase Group", Stage, "Design Summary"]
+    count: [3, 5]
+    guidance: >-
+      Map the design against the Program Design Framework's stages, grouped
+      into 3-5 phase groups. Where pillars run simultaneously, say so in the
+      Design Summary rather than implying a strict sequence.
+    framework_query: "programme design phases stages design framework"
+
+  - id: stakeholder_fit
+    heading: "Stakeholder & Regional Fit"
+    kind: textbox
+    guidance: >-
+      One paragraph: which region(s) this serves and why there, and who the
+      key internal and external stakeholders are and what role each plays.
+    framework_query: "stakeholders regional fit geography"
+
+  - id: feasibility
+    heading: "Feasibility & Pilot Design"
+    kind: key_value
+    fields: ["Is this proposed as a pilot or full rollout?", "If a pilot: duration and scale", "Key feasibility risks tested by the pilot", "Scale-up trigger (what evidence would justify expansion)"]
+    guidance: >-
+      The scale-up trigger must be a specific, measurable threshold, not
+      "if it goes well".
+    framework_query: "feasibility pilot design scale-up trigger"
+
+  - id: meal_plan
+    heading: "MEAL Plan"
+    kind: list
+    columns: [Outcome, Indicator, "Data Source", Frequency]
+    count: [2, 4]
+    guidance: Outcomes are the direct change; each needs a specific indicator, a named data source, and a collection frequency.
+    framework_query: "MEAL plan indicators monitoring evaluation"
+
+  - id: budget
+    heading: "Resourcing & Budget"
+    kind: list
+    columns: ["Line Item", Detail, "Estimated Cost (INR)"]
+    count: [4, 7]
+    guidance: >-
+      Project-specific line items with a brief detail and a cost each.
+      Finish with a row where Line Item is exactly "Total" - its amount will
+      be recomputed automatically as the sum of the other rows, so your own
+      arithmetic there does not need to be exact.
+    framework_query: "budget line items estimated cost"
+
+  - id: risk
+    heading: "Risk & Safeguarding"
+    kind: list
+    columns: [Risk, Likelihood, Mitigation]
+    count: [2, 5]
+    guidance: >-
+      If this involves direct contact with children or vulnerable groups,
+      one row must flag that explicitly and name the applicable safeguarding
+      checkpoint. Likelihood is "Low", "Medium" or "High".
+    framework_query: "risk safeguarding child protection checkpoint"
+
+  - id: scale_exit
+    heading: "Scale / Exit Criteria"
+    kind: textbox
+    guidance: >-
+      One paragraph, defined up front: what success looks like at review,
+      and what would trigger scaling, holding, or discontinuing this
+      initiative.
+    framework_query: "scale exit criteria success threshold"
+
+  - id: decision_requested
+    heading: "Decision Requested from Leadership"
+    kind: key_value
+    fields: ["Approval sought", "Budget sign-off required", "Other enabling decisions (calendar, channel, staffing, etc.)"]
+    guidance: State the specific ask - approval to proceed (pilot or full rollout), a budget sign-off amount, and any other enabling decision.
+    framework_query: "decision requested approval budget sign-off"

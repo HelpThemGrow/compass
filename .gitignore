@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.local.example
 
 # vercel
 .vercel
@@ -39,3 +40,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# runtime data (generated: framework index, uploads, reports, generated docs, credit ledger)
+# mirrors the original Python app's data/ layout - rubrics/, frameworks/, doc_templates/
+# and generation/ at the project root are source content and stay tracked.
+data/
+!data/.gitkeep
+
+# local model weights cache (transformers.js CPU embeddings)
+.cache/
