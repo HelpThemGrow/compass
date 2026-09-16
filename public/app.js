@@ -9,6 +9,22 @@ function esc(value) {
   ));
 }
 
+// Citations and evidence locations are built from extracted document
+// headings, which sometimes carry raw Markdown emphasis (a numbered list
+// item like "2. **Build the Pitch.** ..." is treated as a heading). Strip
+// that before showing the label as plain text. Only double-marker bold and
+// backtick code are handled - single `*`/`_` are left alone because a
+// filename like "14_project_proposal_review_process.md" would otherwise
+// have its underscores eaten as italic delimiters.
+function stripMd(value) {
+  return String(value ?? '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Shared KPI-card icon: one glyph, recoloured per card via the kpi-N accent
 // classes already cycling on `.stat` (see style.css). A different icon per
 // metric would need each call site to know what the metric means; this
@@ -313,11 +329,11 @@ function renderCriterion(c, structural = false) {
       ? `<blockquote><i>The quote cited for this criterion could not be located in the document.
            This score is unverified — check it by hand.</i></blockquote>`
       : c.evidence_quote
-        ? `<blockquote>${esc(c.evidence_quote)}${c.evidence_location ? `<cite>found in: ${esc(c.evidence_location)}</cite>` : ''}</blockquote>`
+        ? `<blockquote>${esc(c.evidence_quote)}${c.evidence_location ? `<cite>found in: ${esc(stripMd(c.evidence_location))}</cite>` : ''}</blockquote>`
         : `<blockquote><i>No supporting evidence found in the document.</i></blockquote>`}
     ${c.gap ? `<div class="kv"><b>Gap:</b> ${esc(c.gap)}</div>` : ''}
     ${c.recommended_fix ? `<div class="kv"><b>Fix:</b> ${esc(c.recommended_fix)}</div>` : ''}
-    ${(c.framework_refs || []).length ? `<div class="muted" style="margin-top:.3rem">Framework: ${c.framework_refs.map(esc).join('; ')}</div>` : ''}
+    ${(c.framework_refs || []).length ? `<div class="muted" style="margin-top:.3rem">Framework: ${c.framework_refs.map((r) => esc(stripMd(r))).join('; ')}</div>` : ''}
   </div>`;
 }
 
@@ -459,12 +475,9 @@ loadGenerateTypes();
 const history = [];
 
 const SUGGESTIONS = [
-  'What is the ceiling on administrative costs?',
   'What must a partner provide for due diligence?',
-  'When is an independent evaluation mandatory?',
-  'What are the child data protection requirements?',
+  'What are the requirements of New Proposal',
   'What must a theory of change contain?',
-  'What permissions are needed to work in government schools?',
 ];
 
 function initSuggestions() {
@@ -508,8 +521,8 @@ async function askQuestion() {
       ${(res.sources || []).length ? `<details class="sources">
         <summary>${res.sources.length} source passage(s) used</summary>
         ${res.sources.map((s) => `<div class="src">
-          <div class="cite">[${s.n}] ${esc(s.citation)}</div>
-          <div class="ex">${esc(s.excerpt)}${s.excerpt.length >= 500 ? '…' : ''}</div>
+          <div class="cite">[${s.n}] ${esc(stripMd(s.citation))}</div>
+          <div class="ex">${esc(stripMd(s.excerpt))}${s.excerpt.length >= 500 ? '…' : ''}</div>
         </div>`).join('')}
       </details>` : ''}`;
 
@@ -670,7 +683,7 @@ async function loadRubricDetail() {
         ${r.criteria.map((c) => `<tr>
           <td><code>${esc(c.id)}</code>${c.critical ? ' <span class="badge bad">critical</span>' : ''}</td>
           <td>${esc(c.dimension)}</td>
-          <td>${esc(c.requirement)}<div class="muted">${(c.framework_refs || []).map(esc).join('; ')}</div></td>
+          <td>${esc(c.requirement)}<div class="muted">${(c.framework_refs || []).map((r) => esc(stripMd(r))).join('; ')}</div></td>
           <td>${c.weight}</td>
         </tr>`).join('')}
       </table></div>`;

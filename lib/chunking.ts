@@ -102,7 +102,13 @@ export function chunkDocument(
     const flush = (buffer: string[], startOffset: number) => {
       const bodyText = buffer.join("\n\n").trim();
       if (!bodyText) return;
-      const payload = heading ? `${heading}\n\n${bodyText}` : bodyText;
+      // A heading detected from an inline bolded lead-in (rather than a
+      // standalone heading line) is itself the first line of the section
+      // body, since the body slice starts at the heading's own offset - so
+      // the first chunk of a section already opens with the heading text.
+      // Prepending it again would duplicate it verbatim.
+      const alreadyLeads = Boolean(heading) && bodyText.startsWith(heading);
+      const payload = heading && !alreadyLeads ? `${heading}\n\n${bodyText}` : bodyText;
       chunks.push({
         text: payload,
         heading,
