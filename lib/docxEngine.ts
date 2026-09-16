@@ -623,7 +623,24 @@ export class TemplateDoc {
     this.fillKvRows(tables[tableIndex], values, false);
   }
 
-  /** Fill a single-cell "bordered box" narrative table. */
+  private isCaptionParagraph(pEl: XmlEl): boolean {
+    const run = iterRuns(pEl)[0];
+    if (!run) return false;
+    const rPr = first(run, "rPr");
+    if (!rPr) return false;
+    const italic = first(rPr, "i");
+    return !!italic && attr(italic, "val") !== "0" && attr(italic, "val") !== "false";
+  }
+
+  /**
+   * Fill a single-cell "bordered box" narrative table. Some templates give
+   * that cell two tiers: a small italic prompt caption (e.g. "Summary:", or
+   * the section's own question restated) followed by blank paragraphs meant
+   * for the answer. Filling straight into the first paragraph would make
+   * the generated prose inherit the caption's italic/small styling, so when
+   * that shape is detected the caption is kept and the answer is written
+   * into normal body-styled paragraphs after it instead.
+   */
   fillTextBox(headingText: string, text: string, opts: { level?: number | null; occurrence?: number } = {}): void {
     const tbl = this.tableAfter(headingText, { required: false, ...opts });
     if (!tbl || !text) return;
@@ -631,8 +648,37 @@ export class TemplateDoc {
     if (!rows.length) return;
     const cells = this.rowCells(rows[0]);
     if (!cells.length) return;
+    const cell = cells[0];
+    const paras = children(cell, "p");
+
+    if (paras.length > 1 && this.isCaptionParagraph(paras[0])) {
+      const caption = paras[0];
+      // The template's own second paragraph is its designated "write here"
+      // placeholder - sample its style before discarding it, rather than
+      // falling back to the document-wide representativeRunStyle heuristic,
+      // which can land on an unrelated italic line elsewhere in the doc.
+      const writeInRun = iterRuns(paras[1])[0];
+      const writeInRPr = writeInRun ? first(writeInRun, "rPr") : null;
+      for (const p of paras.slice(1)) cell.removeChild(p);
+      const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+      let anchor = caption;
+      for (const block of blocks.length ? blocks : [text]) {
+        const pEl = this.doc.createElementNS(W_NS, "w:p");
+        const runEl = this.doc.createElementNS(W_NS, "w:r");
+        if (writeInRPr) runEl.appendChild(writeInRPr.cloneNode(true));
+        else if (this.representativeRunStyle) runEl.appendChild(this.representativeRunStyle.cloneNode(true));
+        const t = this.doc.createElementNS(W_NS, "w:t");
+        setText(t, this.doc, block);
+        runEl.appendChild(t);
+        pEl.appendChild(runEl);
+        cell.insertBefore(pEl, anchor.nextSibling);
+        anchor = pEl;
+      }
+      return;
+    }
+
     const styleRef = this.referenceRunStyle(tbl);
-    this.setCellText(cells[0], text, styleRef);
+    this.setCellText(cell, text, styleRef);
   }
 
   fillListTable(
@@ -649,19 +695,25 @@ export class TemplateDoc {
 
     rows.forEach((rowData, i) => {
       let target: XmlEl;
+      let cloned = false;
       if (i < dataRows.length) {
         target = dataRows[i];
       } else {
         target = this.cloneRow(tbl);
         dataRows = this.tableRows(tbl).slice(1);
+        cloned = true;
       }
       const targetCells = this.rowCells(target);
+      // A cloned row starts as a copy of whatever row preceded it (there is
+      // no blank template row left to reuse) - blank it out first so an
+      // unset column can't leak that row's content into this one.
+      if (cloned) for (const cell of targetCells) this.setCellText(cell, "", styleRef);
       header.forEach((colName, colIdx) => {
         if (colIdx >= targetCells.length) return;
         let value: string | undefined;
         if (AUTO_NUMBER_COLUMN.test(colName)) value = String(i + 1);
         else value = TemplateDoc.lookupColumn(rowData, colName);
-        if (value) this.setCellText(targetCells[colIdx], String(value), styleRef);
+        if (value !== undefined) this.setCellText(targetCells[colIdx], String(value), styleRef);
       });
     });
 
@@ -696,7 +748,7 @@ export class TemplateDoc {
       header.forEach((colName, colIdx) => {
         if (colIdx === keyIdx || colIdx >= cells.length) return;
         const value = TemplateDoc.lookupColumn(rowData, colName);
-        if (value) this.setCellText(cells[colIdx], String(value), styleRef);
+        if (value !== undefined) this.setCellText(cells[colIdx], String(value), styleRef);
       });
     }
   }
