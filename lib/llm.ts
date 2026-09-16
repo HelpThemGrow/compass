@@ -195,7 +195,7 @@ const ACCESS_DENIED_HELP =
   "  2. The key is an NGC or org-scoped key rather than a personal API key generated " +
   "from a model page on build.nvidia.com.\n" +
   "  3. The NVIDIA Developer Program signup was not completed or its terms not accepted.\n" +
-  "Structural checks, retrieval and the framework library all keep working without it.";
+  "Structural checks, retrieval and the knowledge base all keep working without it.";
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 

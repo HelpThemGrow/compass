@@ -52,7 +52,7 @@ export async function answer(
   if (!store.length) {
     return {
       answer:
-        "The framework library is empty. Add the framework documents and standard templates to the `frameworks/` folder, then press Rebuild Index.",
+        "The knowledge base is empty. Add the framework documents and standard templates to the `frameworks/` folder, then press Rebuild Index.",
       sources: [],
       api_calls: 0,
     };

@@ -126,7 +126,7 @@ first draft of a Project Charter, Project Proposal, or Concept Note.
 **Ask the framework** — questions about policy, with citations back to the
 source document and section.
 
-**Framework library** — add or remove framework documents and rebuild the
+**Knowledge base** — add or remove framework documents and rebuild the
 index. No restart needed.
 
 **Rubrics** — see exactly what is being scored, with weights and criteria.

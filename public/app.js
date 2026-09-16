@@ -549,9 +549,9 @@ $('#rebuild').addEventListener('click', async () => {
   const tick = () => {
     const secs = Math.round((Date.now() - started) / 1000);
     const note = secs < 8
-      ? 'Re-indexing the framework library…'
-      : `Re-indexing the framework library… ${secs}s elapsed. Embeddings run locally on the CPU — ` +
-        `a library this size can take a few minutes the first time, or after adding documents. ` +
+      ? 'Re-indexing the knowledge base…'
+      : `Re-indexing the knowledge base… ${secs}s elapsed. Embeddings run locally on the CPU — ` +
+        `a knowledge base this size can take a few minutes the first time, or after adding documents. ` +
         `Once built, the index is cached and loads instantly.`;
     $('#lib-status').innerHTML = `<div class="progress"><span class="spinner"></span> ${note}</div>`;
   };
@@ -607,7 +607,7 @@ async function loadLibrary() {
           <div class="d">${esc(st.frameworks_dir || '')}</div></div>`;
 
     $('#lib-notices').innerHTML = `
-      ${building ? '<div class="notice"><span class="spinner"></span> Indexing the framework library in the background — this page will update automatically. Embeddings run locally on the CPU, so a first build (or one after adding documents) can take a few minutes; searches and reviews will work once it finishes.</div>' : ''}
+      ${building ? '<div class="notice"><span class="spinner"></span> Indexing the knowledge base in the background — this page will update automatically. Embeddings run locally on the CPU, so a first build (or one after adding documents) can take a few minutes; searches and reviews will work once it finishes.</div>' : ''}
       ${stale && !building ? '<div class="notice"><b>The index is out of date.</b> Files have changed since it was last built. Press Rebuild index.</div>' : ''}
       ${(st.errors || []).length ? `<div class="notice bad"><b>Could not index:</b><br>${st.errors.map(esc).join('<br>')}</div>` : ''}`;
 
@@ -626,7 +626,7 @@ async function loadLibrary() {
       : '<tr><td class="empty">No framework documents yet. Add your policies, standards and templates.</td></tr>';
 
     $$('#lib-table button[data-del]').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm(`Remove "${b.dataset.del}" from the framework library?\n\nThis deletes the file from disk.`)) return;
+      if (!confirm(`Remove "${b.dataset.del}" from the knowledge base?\n\nThis deletes the file from disk.`)) return;
       b.disabled = true;
       try {
         await api(`/api/framework/document?path=${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' });

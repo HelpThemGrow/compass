@@ -34,7 +34,7 @@ export default function Home() {
             <span className="nav-ico" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7"/><path d="M9 11h7"/></svg>
             </span>
-            <span>Framework library</span>
+            <span>Knowledge base</span>
           </button>
           <button data-tab="rubrics">
             <span className="nav-ico" aria-hidden="true">
@@ -150,7 +150,7 @@ export default function Home() {
           <div className="page-head">
             <div>
               <h1>Ask a question about the framework</h1>
-              <p className="lead">Answers are drawn only from the framework library and cite where each claim comes from.</p>
+              <p className="lead">Answers are drawn only from the knowledge base and cite where each claim comes from.</p>
             </div>
             <div className="page-head-controls">
               <span className="muted" id="ask-meta"></span>
@@ -161,7 +161,7 @@ export default function Home() {
             <div className="suggest" id="suggest"></div>
             <div className="chat" id="chat">
               <div className="empty" id="chat-empty">
-                Ask anything covered by the documents in the framework library.<br />
+                Ask anything covered by the documents in the knowledge base.<br />
                 Answers are drawn only from those documents and cite where each claim comes from.
               </div>
             </div>
@@ -176,7 +176,7 @@ export default function Home() {
         <section id="tab-library" className="tab">
           <div className="page-head">
             <div>
-              <h1>Framework library</h1>
+              <h1>Knowledge base</h1>
               <p className="lead">The standard everything is checked against: policies, design standards, SOPs and blank templates.</p>
             </div>
             <div className="page-head-controls">
@@ -241,7 +241,7 @@ export default function Home() {
               <li><b>Rubric evaluation</b> — for each criterion the system searches the <em>submitted document</em>
                 for evidence, then judges that evidence against the framework standard. Every score is tied to a
                 quoted passage, so a finding can be checked or contested.</li>
-              <li><b>Framework Q&amp;A</b> — retrieval-grounded answering over the library, used by the Ask tab.</li>
+              <li><b>Framework Q&amp;A</b> — retrieval-grounded answering over the knowledge base, used by the Ask tab.</li>
             </ol>
             <p className="lead">Embeddings and reranking run locally on the CPU, so indexing costs nothing.
               The hosted model is used only for judging and writing feedback, which keeps a full review to
