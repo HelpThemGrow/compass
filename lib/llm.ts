@@ -37,15 +37,24 @@ interface LedgerState {
   last_call: string | null;
 }
 
+/**
+ * The ledger file is the single source of truth. Next.js bundles each API
+ * route separately, so every route holds its own copy of this module - state
+ * cached in memory would go stale in one route while another records calls,
+ * and a later write would overwrite the others' counts. Every read and every
+ * update therefore goes back to the file.
+ */
 class CreditLedger {
   private path: string;
   private budget: number;
-  private state: LedgerState;
 
   constructor(ledgerPath = settings.ledgerPath, budget = settings.creditBudget) {
     this.path = ledgerPath;
     this.budget = budget;
-    this.state = this.load();
+  }
+
+  private get state(): LedgerState {
+    return this.load();
   }
 
   private load(): LedgerState {
@@ -59,9 +68,9 @@ class CreditLedger {
     return { calls: 0, failed_calls: 0, by_purpose: {}, first_call: null, last_call: null };
   }
 
-  private flush(): void {
+  private flush(state: LedgerState): void {
     fs.mkdirSync(path.dirname(this.path), { recursive: true });
-    fs.writeFileSync(this.path, JSON.stringify(this.state, null, 2), "utf-8");
+    fs.writeFileSync(this.path, JSON.stringify(state, null, 2), "utf-8");
   }
 
   remaining(): number {
@@ -79,17 +88,19 @@ class CreditLedger {
   }
 
   record(purpose: string, ok: boolean): void {
-    this.state.calls += 1;
-    if (!ok) this.state.failed_calls += 1;
-    this.state.by_purpose[purpose] = (this.state.by_purpose[purpose] ?? 0) + 1;
+    const state = this.load();
+    state.calls += 1;
+    if (!ok) state.failed_calls += 1;
+    state.by_purpose[purpose] = (state.by_purpose[purpose] ?? 0) + 1;
     const now = new Date().toISOString().replace("T", " ").slice(0, 19);
-    this.state.first_call = this.state.first_call ?? now;
-    this.state.last_call = now;
-    this.flush();
+    state.first_call = state.first_call ?? now;
+    state.last_call = now;
+    this.flush(state);
   }
 
   snapshot() {
-    return { ...this.state, budget: this.budget, remaining: this.remaining() };
+    const state = this.load();
+    return { ...state, budget: this.budget, remaining: Math.max(0, this.budget - state.calls) };
   }
 }
 
@@ -204,32 +215,41 @@ function stripReasoning(text: string): string {
   return text.replace(THINK_RE, "").trim();
 }
 
-export async function chat(
-  messages: ChatMessage[],
-  opts: {
-    purpose?: string;
-    temperature?: number;
-    maxTokens?: number;
-    stats?: CallStats;
-    attempts?: number;
-  } = {}
-): Promise<string> {
+interface ChatOptions {
+  purpose?: string;
+  temperature?: number;
+  maxTokens?: number;
+  stats?: CallStats;
+  attempts?: number;
+  /** Models to try in order. Defaults to NVIDIA_MODEL then NVIDIA_MODEL_FALLBACK. */
+  models?: string[];
+}
+
+function modelChain(models?: string[]): string[] {
+  return Array.from(new Set((models ?? [settings.model, settings.modelFallback]).filter(Boolean)));
+}
+
+function thinkingExtras(): Record<string, unknown> {
+  return settings.disableThinking ? { chat_template_kwargs: { thinking: false } } : {};
+}
+
+function allModelsFailed(purpose: string, errors: string[]): Error {
+  const detail = Array.from(new Set(errors)).join(" | ") || "no models configured";
+  return new Error(
+    `Every configured model failed for '${purpose}'. ${detail}. Set NVIDIA_MODEL in ` +
+      ".env.local to a model your key can reach."
+  );
+}
+
+export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Promise<string> {
   const { purpose = "general", temperature = 0.1, maxTokens = 2048, stats, attempts = 3 } = opts;
   const client = getClient();
   ledger.check();
 
-  let extras: Record<string, unknown> = settings.disableThinking
-    ? { chat_template_kwargs: { thinking: false } }
-    : {};
-
-  const models = [settings.model];
-  if (settings.modelFallback && settings.modelFallback !== settings.model) {
-    models.push(settings.modelFallback);
-  }
-
+  let extras = thinkingExtras();
   const errors: string[] = [];
 
-  for (const model of models) {
+  for (const model of modelChain(opts.models)) {
     for (let attempt = 0; attempt < attempts; attempt++) {
       await limiter.acquire();
       let ok = false;
@@ -247,30 +267,135 @@ export async function chat(
           ?.content ?? "";
         return stripReasoning(content);
       } catch (exc) {
-        if (isAccessDenied(exc)) {
-          ledger.record(purpose, ok);
-          throw new AccessDenied(ACCESS_DENIED_HELP);
-        }
+        if (isAccessDenied(exc)) throw new AccessDenied(ACCESS_DENIED_HELP);
         if (Object.keys(extras).length && isUnknownField(exc)) {
           extras = {};
-          ledger.record(purpose, ok);
           continue;
         }
         errors.push(`${model}: ${String((exc as Error)?.message ?? exc).slice(0, 200)}`);
-        ledger.record(purpose, ok);
         if (isBadModel(exc)) break; // retired or unknown - the fallback model may work
         if (!isRetryable(exc) || attempt === attempts - 1) break;
         await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
         continue;
+      } finally {
+        ledger.record(purpose, ok);
       }
     }
   }
 
-  const detail = Array.from(new Set(errors)).join(" | ") || "no models configured";
-  throw new Error(
-    `Every configured model failed for '${purpose}'. ${detail}. Set NVIDIA_MODEL in ` +
-      ".env.local to a model your key can reach."
-  );
+  throw allModelsFailed(purpose, errors);
+}
+
+/**
+ * Drops <think>...</think> blocks from a token stream. Tags can arrive split
+ * across chunks, so a possible partial tag is held back until the next chunk
+ * settles it.
+ */
+class ThinkFilter {
+  private buf = "";
+  private inThink = false;
+
+  push(chunk: string): string {
+    this.buf += chunk;
+    let out = "";
+    for (;;) {
+      const tag = this.inThink ? "</think>" : "<think>";
+      const idx = this.buf.toLowerCase().indexOf(tag);
+      if (idx !== -1) {
+        if (!this.inThink) out += this.buf.slice(0, idx);
+        this.buf = this.buf.slice(idx + tag.length);
+        this.inThink = !this.inThink;
+        continue;
+      }
+      let keep = 0;
+      for (let k = Math.min(tag.length - 1, this.buf.length); k > 0; k--) {
+        if (tag.startsWith(this.buf.slice(-k).toLowerCase())) {
+          keep = k;
+          break;
+        }
+      }
+      if (!this.inThink) out += this.buf.slice(0, this.buf.length - keep);
+      this.buf = this.buf.slice(this.buf.length - keep);
+      return out;
+    }
+  }
+
+  flush(): string {
+    const rest = this.inThink ? "" : this.buf;
+    this.buf = "";
+    return rest;
+  }
+}
+
+/**
+ * Streaming counterpart of chat(): yields answer text as the model writes it.
+ * Retries and model fallback work the same way, but only until the first
+ * text has been yielded - once words are on the reader's screen a failure
+ * is surfaced rather than silently restarted with a different model.
+ */
+export async function* chatStream(messages: ChatMessage[], opts: ChatOptions = {}): AsyncGenerator<string> {
+  const { purpose = "general", temperature = 0.1, maxTokens = 2048, stats, attempts = 3 } = opts;
+  const client = getClient();
+  ledger.check();
+
+  let extras = thinkingExtras();
+  const errors: string[] = [];
+
+  for (const model of modelChain(opts.models)) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      await limiter.acquire();
+      let ok = false;
+      let started = false;
+      try {
+        const stream = (await client.chat.completions.create({
+          model,
+          messages,
+          temperature,
+          max_tokens: maxTokens,
+          stream: true,
+          ...extras,
+        } as Parameters<typeof client.chat.completions.create>[0])) as unknown as AsyncIterable<{
+          choices?: { delta?: { content?: string | null } }[];
+        }>;
+        const filter = new ThinkFilter();
+        for await (const part of stream) {
+          const visible = filter.push(part.choices?.[0]?.delta?.content ?? "");
+          if (visible) {
+            started = true;
+            yield visible;
+          }
+        }
+        const tail = filter.flush();
+        if (tail) {
+          started = true;
+          yield tail;
+        }
+        if (!started) {
+          errors.push(`${model}: empty response`);
+          break;
+        }
+        ok = true;
+        stats?.add(purpose);
+        return;
+      } catch (exc) {
+        if (started) throw exc;
+        if (isAccessDenied(exc)) throw new AccessDenied(ACCESS_DENIED_HELP);
+        if (Object.keys(extras).length && isUnknownField(exc)) {
+          extras = {};
+          continue;
+        }
+        errors.push(`${model}: ${String((exc as Error)?.message ?? exc).slice(0, 200)}`);
+        if (isBadModel(exc)) break;
+        if (!isRetryable(exc) || attempt === attempts - 1) break;
+        await new Promise((r) => setTimeout(r, 2 ** attempt * 1000));
+        continue;
+      } finally {
+        ledger.record(purpose, ok);
+      }
+    }
+  }
+
+  throw allModelsFailed(purpose, errors);
 }
 
 // --------------------------------------------------------------------------
@@ -377,6 +502,8 @@ export function health() {
     configured: settings.llmConfigured,
     model: settings.model,
     fallback: settings.modelFallback,
+    qa_model: settings.qaModel,
+    qa_fallback: settings.qaModelFallback,
     base_url: settings.nvidiaBaseUrl,
     ledger: ledger.snapshot(),
   };

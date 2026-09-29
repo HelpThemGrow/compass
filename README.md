@@ -38,11 +38,22 @@ document*, each query is a *framework criterion*. Every score is anchored to a
 verbatim quote or explicitly marked as having no evidence
 (`lib/evaluate.ts`).
 
-### Layer 2 — Framework Q&A (classic RAG)
+### Layer 2 — Ask the framework (RAG with whole-document context)
 
 Hybrid retrieval (dense + BM25, fused by Reciprocal Rank Fusion) over the
-framework library, with a prompt that refuses to answer from general
-knowledge (`lib/qa.ts`, `lib/store.ts`).
+knowledge base, with a prompt that refuses to answer from general knowledge
+(`lib/qa.ts`, `lib/store.ts`).
+
+Retrieved passages vote for the documents they belong to, and the top
+documents are given to the model **whole** — every section, with headings —
+plus the strongest extra passages from other documents. Passage-level top-k
+alone fragments a policy: "What must a partner provide for due diligence?"
+matches the Due Diligence Policy's title and conclusion but not the seven
+numbered sections that actually hold the requirements. The whole knowledge
+base is ~30K tokens, so whole documents fit comfortably.
+
+Answers are Markdown (headings, bullets, tables, `[n]` citations), rendered
+safely in the chat and streamed as the model writes them.
 
 ### Layer 3 — Generate a document from a description
 
@@ -78,6 +89,25 @@ Q&A, and drafting generated documents.
 `NVIDIA_API_KEY`, `NVIDIA_MODEL`, `NVIDIA_RPM_LIMIT`, `CREDIT_BUDGET`, and
 every other setting use the exact same variable names as the Python app's
 `.env`, so a working key/config drops straight into `.env.local`.
+
+### Which NVIDIA models, and why
+
+All models are on NVIDIA's free hosted endpoint (build.nvidia.com).
+
+| Task | Model | Fallback |
+|---|---|---|
+| Verify / Generate (`NVIDIA_MODEL`) | `nvidia/nemotron-3-super-120b-a12b` — fast | `nvidia/nemotron-3-ultra-550b-a55b` |
+| Ask the framework (`NVIDIA_QA_MODEL`) | `nvidia/nemotron-3-ultra-550b-a55b` — best answers | `nvidia/nemotron-3-super-120b-a12b` |
+
+Chosen on 2026-09-28 by testing every plausible catalogue model with this
+app's real prompts. Many listed models returned 404 or did not respond within
+a minute on the free tier. Of the two Nemotron 3 models that did, blind
+judging of 8 real staff questions against the source policies scored the 550B
+model clearly higher on completeness and structure. The 120B model is faster
+but returned "503 overloaded" on roughly a third of calls, so each model backs
+the other up. Verify and Generate stay on the faster model because they make
+many calls per task. Model availability changes often: re-check before
+changing these values.
 
 ---
 

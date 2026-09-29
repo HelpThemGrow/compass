@@ -52,8 +52,16 @@ export const settings = {
   // --- LLM ------------------------------------------------------------------
   nvidiaApiKey: cleanApiKey(process.env.NVIDIA_API_KEY ?? ""),
   nvidiaBaseUrl: process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1",
+  // Verification and document generation: many structured JSON calls per
+  // task, so the fast model leads and the larger one covers its 503s.
   model: process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b",
-  modelFallback: process.env.NVIDIA_MODEL_FALLBACK || "openai/gpt-oss-120b",
+  modelFallback: process.env.NVIDIA_MODEL_FALLBACK || "nvidia/nemotron-3-ultra-550b-a55b",
+  // Ask the framework: one call per question, read by a person, so answer
+  // quality leads. In blind judging against the source policies the 550B
+  // model gave clearly more complete, better-structured answers; it is
+  // slower, which streaming hides.
+  qaModel: process.env.NVIDIA_QA_MODEL || "nvidia/nemotron-3-ultra-550b-a55b",
+  qaModelFallback: process.env.NVIDIA_QA_MODEL_FALLBACK || "nvidia/nemotron-3-super-120b-a12b",
 
   rpmLimit: int("NVIDIA_RPM_LIMIT", 35),
   // Confirmed against a real account: NVIDIA's free hosted endpoint does not

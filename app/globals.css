@@ -329,8 +329,26 @@ details.dim > summary .spacer { margin-left: auto; }
 .msg { max-width: 92%; }
 .msg.user { align-self: flex-end; background: var(--brand); color: #fff; padding: .55rem .85rem; border-radius: 12px 12px 2px 12px; font-size: .9rem; }
 .msg.bot { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--line); padding: .7rem .9rem; border-radius: 12px 12px 12px 2px; font-size: .9rem; }
-.msg.bot .body { white-space: pre-wrap; }
+.msg.bot .body { line-height: 1.6; }
+.msg.bot .body > :first-child { margin-top: 0; }
+.msg.bot .body > :last-child { margin-bottom: 0; }
+.msg.bot .body p { margin: 0 0 .6rem; }
+.msg.bot .body h4, .msg.bot .body h5, .msg.bot .body h6 { margin: 1rem 0 .35rem; color: var(--ink); font-weight: 650; line-height: 1.35; }
+.msg.bot .body h4 { font-size: 1rem; }
+.msg.bot .body h5 { font-size: .94rem; }
+.msg.bot .body h6 { font-size: .9rem; }
+.msg.bot .body ul, .msg.bot .body ol { margin: .2rem 0 .65rem; padding-left: 1.3rem; }
+.msg.bot .body li { margin: .2rem 0; }
+.msg.bot .body li > ul, .msg.bot .body li > ol { margin: .2rem 0; }
+.msg.bot .body strong { font-weight: 650; color: var(--ink); }
+.msg.bot .body hr { border: none; border-top: 1px solid var(--line); margin: .8rem 0; }
+.msg.bot .body blockquote { margin: .5rem 0 .7rem; padding: .45rem .8rem; border-left: 3px solid var(--line); background: var(--panel); color: var(--ink-2); border-radius: 0 6px 6px 0; }
+.msg.bot .body .md-table { margin: .3rem 0 .7rem; background: var(--panel); font-size: .84rem; }
+.msg.bot .body .md-table th { text-transform: none; letter-spacing: 0; font-size: .8rem; color: var(--ink-2); background: var(--panel-2); }
 .msg.bot .body code { font-family: var(--mono); font-size: .84rem; background: var(--info-soft); padding: .05rem .3rem; border-radius: 4px; }
+.msg.bot .body .cite-ref { font-size: .68rem; font-weight: 650; color: var(--brand); margin-left: .1rem; }
+.stream-cursor { display: inline-block; width: .45rem; height: 1rem; margin-left: .15rem; vertical-align: text-bottom; background: var(--brand); opacity: .55; animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
 .ask-row { display: flex; gap: .6rem; align-items: flex-end; }
 .ask-row textarea { flex: 1; resize: vertical; min-height: 46px; }
 

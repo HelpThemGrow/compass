@@ -18,6 +18,7 @@ function esc(value) {
 // have its underscores eaten as italic delimiters.
 function stripMd(value) {
   return String(value ?? '')
+    .replace(/(^|\n)[ \t]*#{1,6}[ \t]+/g, '$1')
     .replace(/\*\*(.+?)\*\*/g, '$1')
     .replace(/__(.+?)__/g, '$1')
     .replace(/`(.+?)`/g, '$1')
@@ -506,39 +507,210 @@ async function askQuestion() {
   chat.insertAdjacentHTML('beforeend', `<div class="msg user">${esc(question)}</div>`);
   const pending = document.createElement('div');
   pending.className = 'msg bot';
-  pending.innerHTML = '<span class="spinner"></span> Searching the framework…';
+  pending.innerHTML = '<span class="spinner"></span> Finding the relevant policies…';
   chat.appendChild(pending);
   chat.scrollTop = chat.scrollHeight;
 
+  // Follow the answer as it grows, unless the reader has scrolled up to read.
+  const nearBottom = () => chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
+  let answer = '';
+  let sources = [];
+  let finished = null;
+  let renderQueued = false;
+  const render = () => {
+    renderQueued = false;
+    const follow = nearBottom();
+    pending.innerHTML = `<div class="body">${renderMarkdown(answer)}${finished ? '' : '<span class="stream-cursor"></span>'}</div>
+      ${finished ? sourcesHtml(sources) : ''}`;
+    if (follow) chat.scrollTop = chat.scrollHeight;
+  };
+
   try {
-    const res = await api('/api/ask', {
+    const res = await fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, history: history.slice(-8) }),
     });
+    if (!res.ok || !res.body) {
+      let payload = null;
+      try { payload = await res.json(); } catch { /* non-JSON error body */ }
+      throw new Error(payload?.detail || `${res.status} ${res.statusText}`);
+    }
 
-    pending.innerHTML = `<div class="body">${linkCitations(res.answer)}</div>
-      ${(res.sources || []).length ? `<details class="sources">
-        <summary>${res.sources.length} source passage(s) used</summary>
-        ${res.sources.map((s) => `<div class="src">
-          <div class="cite">[${s.n}] ${esc(stripMd(s.citation))}</div>
-          <div class="ex">${esc(stripMd(s.excerpt))}${s.excerpt.length >= 500 ? '…' : ''}</div>
-        </div>`).join('')}
-      </details>` : ''}`;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = '';
+    const handle = (event) => {
+      if (event.type === 'sources') {
+        sources = event.sources || [];
+        if (!answer) {
+          pending.innerHTML = `<span class="spinner"></span> Reading ${sources.length} relevant document${sources.length === 1 ? '' : 's'} and writing the answer…`;
+        }
+      } else if (event.type === 'delta') {
+        answer += event.text;
+        if (!renderQueued) {
+          renderQueued = true;
+          requestAnimationFrame(render);
+        }
+      } else if (event.type === 'done') {
+        finished = event;
+      } else if (event.type === 'error') {
+        throw new Error(event.message);
+      }
+    };
 
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffered.indexOf('\n')) !== -1) {
+        const line = buffered.slice(0, nl).trim();
+        buffered = buffered.slice(nl + 1);
+        if (line) handle(JSON.parse(line));
+      }
+    }
+    if (buffered.trim()) handle(JSON.parse(buffered));
+
+    finished = finished || {};
+    render();
     history.push({ role: 'user', content: question });
-    history.push({ role: 'assistant', content: res.answer });
-    $('#ask-meta').textContent = `${res.credits_remaining} model calls remaining in budget`;
+    history.push({ role: 'assistant', content: answer });
+    if (finished.credits_remaining !== undefined) {
+      $('#ask-meta').textContent = `${finished.credits_remaining} model calls remaining in budget`;
+    }
   } catch (err) {
-    pending.innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    pending.innerHTML = `${answer ? `<div class="body">${renderMarkdown(answer)}</div>` : ''}<div class="notice bad">${esc(err.message)}</div>`;
   } finally {
     $('#ask').disabled = false;
-    chat.scrollTop = chat.scrollHeight;
   }
 }
 
-function linkCitations(text) {
-  return esc(text).replace(/\[(\d+)\]/g, '<code>[$1]</code>');
+function sourcesHtml(srcs) {
+  if (!srcs.length) return '';
+  return `<details class="sources">
+    <summary>${srcs.length} source${srcs.length === 1 ? '' : 's'} used</summary>
+    ${srcs.map((s) => `<div class="src">
+      <div class="cite">[${s.n}] ${esc(stripMd(s.citation))}
+        <span class="tag">${s.kind === 'document' ? 'full document' : 'extract'}</span></div>
+      <div class="ex">${s.kind === 'document' && s.heading ? `<b>Most relevant section:</b> ${esc(stripMd(s.heading))} — ` : ''}${esc(stripMd(s.excerpt))}${s.excerpt.length >= 500 ? '…' : ''}</div>
+    </div>`).join('')}
+  </details>`;
+}
+
+// Inline Markdown on text that has ALREADY been HTML-escaped, so the only
+// tags that can appear are the ones added here.
+function inlineMd(escaped) {
+  return escaped
+    .split(/(`[^`]+`)/)
+    .map((part) => {
+      if (/^`[^`]+`$/.test(part)) return `<code>${part.slice(1, -1)}</code>`;
+      return part
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/\[(\d+(?:\s*[,;]\s*(?:\d+|(?:Section|Sec\.?|§)\s*[\w.–-]+))*)\]/g, '<sup class="cite-ref">[$1]</sup>');
+    })
+    .join('');
+}
+
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const TABLE_DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+function tableCells(line) {
+  return line.trim().replace(/^\||\|$/g, '').split('|').map((c) => inlineMd(c.trim()));
+}
+
+// Model answers are Markdown: headings, bullet/numbered lists (nested by
+// indentation), bold/italic, tables, blockquotes and [n] citations. Links and
+// raw HTML are deliberately not supported - everything is escaped first.
+function renderMarkdown(src) {
+  const lines = esc(String(src ?? '').replace(/\r\n?/g, '\n')).split('\n');
+  const out = [];
+  const lists = [];
+  let para = [];
+  let quote = [];
+
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${inlineMd(para.join(' '))}</p>`);
+    para = [];
+  };
+  const flushQuote = () => {
+    if (quote.length) out.push(`<blockquote>${inlineMd(quote.join(' '))}</blockquote>`);
+    quote = [];
+  };
+  const closeLists = (downTo = -1) => {
+    while (lists.length && lists[lists.length - 1].indent > downTo) out.push(`</li></${lists.pop().type}>`);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const item = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    const heading = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
+    const quoteLine = line.match(/^\s*&gt;\s?(.*)$/);
+
+    if (!line.trim()) {
+      flushPara();
+      flushQuote();
+      continue;
+    }
+    if (item) {
+      flushPara();
+      flushQuote();
+      const indent = item[1].replace(/\t/g, '    ').length;
+      const type = /\d/.test(item[2]) ? 'ol' : 'ul';
+      closeLists(indent);
+      const top = lists[lists.length - 1];
+      if (!top || top.indent < indent) {
+        out.push(`<${type}>`);
+        lists.push({ type, indent });
+      } else {
+        out.push('</li>');
+        if (top.type !== type) {
+          out.push(`</${lists.pop().type}><${type}>`);
+          lists.push({ type, indent });
+        }
+      }
+      out.push(`<li>${inlineMd(item[3])}`);
+      continue;
+    }
+    if (lists.length && /^\s+\S/.test(line)) {
+      out.push(` ${inlineMd(line.trim())}`);
+      continue;
+    }
+
+    closeLists();
+    if (heading) {
+      flushPara();
+      flushQuote();
+      const tag = heading[1].length <= 2 ? 'h4' : heading[1].length === 3 ? 'h5' : 'h6';
+      out.push(`<${tag}>${inlineMd(heading[2])}</${tag}>`);
+    } else if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushPara();
+      flushQuote();
+      out.push('<hr>');
+    } else if (TABLE_ROW.test(line) && TABLE_DIVIDER.test(lines[i + 1] ?? '')) {
+      flushPara();
+      flushQuote();
+      const head = tableCells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && TABLE_ROW.test(lines[i])) rows.push(tableCells(lines[i++]));
+      i -= 1;
+      out.push(`<div class="scroll-x"><table class="md-table"><tr>${head.map((c) => `<th>${c}</th>`).join('')}</tr>${
+        rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`);
+    } else if (quoteLine) {
+      flushPara();
+      quote.push(quoteLine[1]);
+    } else {
+      flushQuote();
+      para.push(line.trim());
+    }
+  }
+  flushPara();
+  flushQuote();
+  closeLists();
+  return out.join('');
 }
 
 // ---------------------------------------------------------------- library
@@ -744,7 +916,7 @@ async function loadHealth() {
     $('#health').innerHTML = `
       <div class="stat">${statIcon()}<div class="k">Model access</div>
         <div class="v">${llm.configured ? 'Connected' : 'No API key'}</div>
-        <div class="d">${esc(llm.model || '')}</div>
+        <div class="d">Verify &amp; generate: ${esc(llm.model || '')}<br>Ask: ${esc(llm.qa_model || llm.model || '')}</div>
         <span class="badge ${llm.configured ? 'good' : 'bad'}">${llm.configured ? 'Connected' : 'No API key'}</span></div>
       <div class="stat">${statIcon()}<div class="k">Call budget</div>
         <div class="v">${led.remaining ?? 0} left</div>
