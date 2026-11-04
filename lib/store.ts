@@ -80,6 +80,17 @@ function dot(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
+/**
+ * Write via a temporary file and rename, so a crash mid-write can never leave
+ * a half-written index file behind (rename replaces the target in one step).
+ */
+export function writeFileAtomic(file: string, data: string): void {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, data, "utf-8");
+  fs.renameSync(tmp, file);
+}
+
 export class VectorStore {
   name: string;
   chunks: Chunk[] = [];
@@ -95,6 +106,13 @@ export class VectorStore {
     const embedder = await getEmbedder();
     this.vectors = await embedder.embedPassages(chunks.map((c) => c.text));
     this.bm25Index = new BM25(chunks.map((c) => c.text));
+  }
+
+  /** Replace the contents with chunks whose vectors are already known - no embedding. */
+  setEntries(chunks: Chunk[], vectors: Float32Array[]): void {
+    this.chunks = chunks;
+    this.vectors = vectors;
+    this.bm25Index = null;
   }
 
   async add(chunks: Chunk[]): Promise<void> {
@@ -124,31 +142,31 @@ export class VectorStore {
 
   async save(): Promise<void> {
     const [vecPath, metaPath] = this.paths();
-    fs.mkdirSync(path.dirname(vecPath), { recursive: true });
     const embedder = await getEmbedder();
-    fs.writeFileSync(vecPath, JSON.stringify(this.vectors.map((v) => Array.from(v))));
+    writeFileAtomic(vecPath, JSON.stringify(this.vectors.map((v) => Array.from(v))));
     const payload = {
       embedding_backend: embedder.name,
       dim: this.vectors.length ? this.vectors[0].length : 0,
       chunks: this.chunks,
     };
-    fs.writeFileSync(metaPath, JSON.stringify(payload), "utf-8");
+    writeFileAtomic(metaPath, JSON.stringify(payload));
   }
 
+  /** Load from disk. On any mismatch the store is left untouched and false is returned. */
   async load(): Promise<boolean> {
     const [vecPath, metaPath] = this.paths();
     if (!fs.existsSync(vecPath) || !fs.existsSync(metaPath)) return false;
     try {
       const payload = JSON.parse(fs.readFileSync(metaPath, "utf-8"));
-      this.chunks = payload.chunks as Chunk[];
+      const chunks = payload.chunks as Chunk[];
       const raw = JSON.parse(fs.readFileSync(vecPath, "utf-8")) as number[][];
-      this.vectors = raw.map((v) => Float32Array.from(v));
+      const vectors = raw.map((v) => Float32Array.from(v));
 
       const embedder = await getEmbedder();
       if (payload.embedding_backend !== embedder.name) return false;
-      if (this.vectors.length && this.vectors[0].length !== embedder.dim) return false;
-      if (this.vectors.length && this.vectors.length !== this.chunks.length) return false;
-      this.bm25Index = null;
+      if (!Array.isArray(chunks) || vectors.length !== chunks.length) return false;
+      if (vectors.some((v) => v.length !== embedder.dim)) return false;
+      this.setEntries(chunks, vectors);
       return true;
     } catch {
       return false;

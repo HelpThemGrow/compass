@@ -180,8 +180,8 @@ export default function Home() {
               <p className="lead">The standard everything is checked against: policies, design standards, SOPs and blank templates.</p>
             </div>
             <div className="page-head-controls">
-              <button className="btn ghost small" id="lib-upload-btn">Add documents</button>
-              <button className="btn small" id="rebuild">Rebuild index</button>
+              <button className="btn ghost small" id="rebuild">Rebuild index</button>
+              <button className="btn small" id="lib-upload-btn">Add documents</button>
             </div>
           </div>
 

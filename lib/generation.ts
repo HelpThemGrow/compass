@@ -239,6 +239,7 @@ export function availableTypes() {
 }
 
 export function getGuide(docType: string): GenerationGuide {
+  if (!/^[A-Za-z0-9_-]+$/.test(docType)) throw new GenerationError(`Unknown document type '${docType}'.`);
   const guidePath = path.join(GENERATION_DIR, `${docType}.yaml`);
   if (fs.existsSync(guidePath)) {
     const mtime = fs.statSync(guidePath).mtimeMs;

@@ -11,7 +11,6 @@ const nextConfig: NextConfig = {
     "onnxruntime-node",
     "jszip",
     "@xmldom/xmldom",
-    "xlsx",
     "pdf-parse",
   ],
 };

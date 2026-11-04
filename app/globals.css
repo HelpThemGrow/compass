@@ -154,7 +154,7 @@ button.btn.small { padding: .32rem .7rem; font-size: .82rem; }
 button.btn.danger { background: transparent; color: var(--bad); border-color: var(--line); }
 button.btn.danger:hover:not(:disabled) { background: var(--bad-soft); }
 
-select, input[type="text"], textarea {
+select, input[type="text"], input[type="password"], textarea {
   font: inherit;
   font-size: .9rem;
   padding: .5rem .6rem;
@@ -417,6 +417,19 @@ details.dim > summary .spacer { margin-left: auto; }
 .progress { font-size: .87rem; color: var(--ink-2); display: flex; align-items: center; gap: .5rem; }
 .empty { text-align: center; padding: 2.5rem 1rem; color: var(--ink-3); font-size: .9rem; }
 .hidden { display: none !important; }
+
+/* ---------- sign-in ---------- */
+.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; background: var(--brand); }
+.login-panel { width: 100%; max-width: 380px; background: var(--panel); border-radius: var(--radius); padding: 1.8rem 1.8rem 1.6rem; box-shadow: var(--shadow); display: grid; gap: .9rem; }
+.login-panel .lead { margin: 0; }
+.login-panel .notice { margin: 0; }
+.login-brand { display: flex; align-items: center; gap: .6rem; }
+.login-brand img { height: 36px; width: auto; }
+.login-brand strong { font-size: 1.25rem; color: var(--brand); }
+.sidebar-foot .who { color: #c8d2ec; font-weight: 600; word-break: break-all; }
+.sidebar-foot .role { display: inline-block; margin: .3rem 0 .5rem; }
+.sidebar-foot button { background: none; border: 1px solid rgba(255, 255, 255, .2); color: #c8d2ec; border-radius: 6px; padding: .25rem .6rem; font: inherit; font-size: .74rem; cursor: pointer; }
+.sidebar-foot button:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .toolbar { display: flex; gap: .5rem; flex-wrap: wrap; }
 
 @media (max-width: 860px) {

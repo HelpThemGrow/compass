@@ -208,8 +208,7 @@ async function frameworkContext(rubric: Rubric, dimension: Dimension, topK = 4):
   const store = await ingest.getStore();
   if (!store.length) return "";
 
-  const built = ingest.statusReport().built_at;
-  const key = `${rubric.id}::${rubric.version}::${dimension.id}::${built}`;
+  const key = `${rubric.id}::${rubric.version}::${dimension.id}::${ingest.indexGeneration()}`;
   if (frameworkCache.has(key)) return frameworkCache.get(key)!;
 
   const query = `${dimension.name}. ${dimension.criteria.slice(0, 6).map((c) => c.requirement).join(" ")}`;

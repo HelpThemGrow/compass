@@ -38,8 +38,16 @@ function statIcon() {
   return `<span class="stat-ico">${STAT_ICON}</span>`;
 }
 
+function toLogin() {
+  location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
+}
+
 async function api(path, options = {}) {
   const res = await fetch(path, options);
+  if (res.status === 401) {
+    toLogin();
+    throw new Error('Your session has ended. Please sign in again.');
+  }
   let payload = null;
   try { payload = await res.json(); } catch { /* non-JSON error body */ }
   if (!res.ok) {
@@ -531,6 +539,10 @@ async function askQuestion() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, history: history.slice(-8) }),
     });
+    if (res.status === 401) {
+      toLogin();
+      return;
+    }
     if (!res.ok || !res.body) {
       let payload = null;
       try { payload = await res.json(); } catch { /* non-JSON error body */ }
@@ -714,28 +726,19 @@ function renderMarkdown(src) {
 }
 
 // ---------------------------------------------------------------- library
+// Indexing runs in the background on the server: every action below returns
+// quickly, and loadLibrary() polls until the index has caught up.
 $('#rebuild').addEventListener('click', async () => {
+  if (!confirm('Re-embed every document from scratch?\n\nThis is only needed if search results look wrong. ' +
+    'Added and removed documents are indexed automatically.')) return;
   const btn = $('#rebuild');
-  btn.disabled = true;
-  const started = Date.now();
-  const tick = () => {
-    const secs = Math.round((Date.now() - started) / 1000);
-    const note = secs < 8
-      ? 'Re-indexing the knowledge base…'
-      : `Re-indexing the knowledge base… ${secs}s elapsed. Embeddings run locally on the CPU — ` +
-        `a knowledge base this size can take a few minutes the first time, or after adding documents. ` +
-        `Once built, the index is cached and loads instantly.`;
-    $('#lib-status').innerHTML = `<div class="progress"><span class="spinner"></span> ${note}</div>`;
-  };
-  tick();
-  const ticker = setInterval(tick, 1000);
+  btn.disabled = true; // loadLibrary() keeps it disabled until the rebuild finishes
+  $('#lib-status').innerHTML = '';
   try {
     await api('/api/framework/rebuild', { method: 'POST' });
     await loadLibrary();
   } catch (err) {
     $('#lib-status').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
-  } finally {
-    clearInterval(ticker);
     btn.disabled = false;
   }
 });
@@ -746,12 +749,14 @@ $('#lib-file').addEventListener('change', async () => {
   if (!files.length) return;
   const body = new FormData();
   Array.from(files).forEach((f) => body.append('files', f));
-  $('#lib-status').innerHTML = '<div class="progress"><span class="spinner"></span> Uploading and re-indexing…</div>';
+  $('#lib-status').innerHTML = `<div class="progress"><span class="spinner"></span> Uploading ${files.length} file${files.length === 1 ? '' : 's'}…</div>`;
   try {
     const res = await api('/api/framework/upload', { method: 'POST', body });
-    if (res.errors?.length) {
-      $('#lib-status').innerHTML = `<div class="notice bad">${res.errors.map(esc).join('<br>')}</div>`;
-    }
+    $('#lib-status').innerHTML = [
+      res.saved?.length ? `<div class="notice info">Added ${res.saved.map(esc).join(', ')}. Indexing only ${res.saved.length === 1 ? 'the new file — it becomes' : 'the new files — they become'} searchable when marked <b>Indexed</b> below.</div>` : '',
+      res.errors?.length ? `<div class="notice bad">${res.errors.map(esc).join('<br>')}</div>` : '',
+      res.warnings?.length ? `<div class="notice warn">${res.warnings.map(esc).join('<br>')}</div>` : '',
+    ].join('');
     await loadLibrary();
   } catch (err) {
     $('#lib-status').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
@@ -760,56 +765,94 @@ $('#lib-file').addEventListener('change', async () => {
 });
 
 let _libPollTimer = null;
+let _libPolling = false;
+// Paths whose DELETE is in flight - a poll redraw must not bring their Remove button back.
+const _removing = new Set();
+
+function indexBadge(d) {
+  if (d.index_state === 'indexed') return `<span class="badge good">Indexed · ${d.chunks} passages</span>`;
+  if (d.index_state === 'error') return `<span class="badge bad" title="${esc(d.error)}">Could not index</span>`;
+  return '<span class="badge warn">Indexing…</span>';
+}
 
 async function loadLibrary() {
   try {
     const data = await api('/api/framework');
     const st = data.status || {};
-    const stale = st.stale;
     const building = st.state === 'building';
+    const docs = data.documents || [];
+    const pending = docs.filter((d) => d.index_state === 'pending').length;
+    const p = st.progress;
 
+    const stateLabel = { ready: 'Ready', building: 'Updating', empty: 'Empty', not_built: 'Not built', error: 'Error' }[st.state] || st.state || 'Unknown';
     $('#lib-stats').innerHTML = `
         <div class="stat">${statIcon()}<div class="k">Index</div>
-          <div class="v">${esc(st.state || 'unknown')}</div>
-          <div class="d">${st.built_at ? `built ${esc(st.built_at)}` : 'not built yet'}</div>
-          <span class="badge ${st.state === 'ready' ? 'good' : 'warn'}">${st.state === 'ready' ? 'Ready' : esc(st.state || 'Unknown')}</span></div>
+          <div class="v">${esc(stateLabel)}</div>
+          <div class="d">${st.built_at ? `updated ${esc(st.built_at)}` : 'not built yet'}</div>
+          <span class="badge ${st.state === 'ready' ? 'good' : st.state === 'error' ? 'bad' : 'warn'}">${esc(stateLabel)}</span></div>
         <div class="stat">${statIcon()}<div class="k">Documents</div><div class="v">${st.documents ?? 0}</div>
           <div class="d">${st.chunks ?? 0} searchable passages</div></div>
         <div class="stat">${statIcon()}<div class="k">Files on disk</div><div class="v">${st.files_on_disk ?? 0}</div>
           <div class="d">${esc(st.frameworks_dir || '')}</div></div>`;
 
+    const progressText = p && p.total
+      ? ` — checking ${p.done} of ${p.total} files${p.current ? ` (${esc(p.current)})` : ''}`
+      : '';
     $('#lib-notices').innerHTML = `
-      ${building ? '<div class="notice"><span class="spinner"></span> Indexing the knowledge base in the background — this page will update automatically. Embeddings run locally on the CPU, so a first build (or one after adding documents) can take a few minutes; searches and reviews will work once it finishes.</div>' : ''}
-      ${stale && !building ? '<div class="notice"><b>The index is out of date.</b> Files have changed since it was last built. Press Rebuild index.</div>' : ''}
+      ${building || pending ? `<div class="notice"><span class="spinner"></span> Updating the index${progressText}. Only new or changed files are embedded; removed files are dropped instantly. Searches keep working on the current index meanwhile.</div>` : ''}
+      ${st.state === 'error' ? `<div class="notice bad"><b>Indexing failed:</b> ${esc(st.message || 'unknown error')}</div>` : ''}
       ${(st.errors || []).length ? `<div class="notice bad"><b>Could not index:</b><br>${st.errors.map(esc).join('<br>')}</div>` : ''}`;
 
     clearTimeout(_libPollTimer);
-    if (building) {
-      _libPollTimer = setTimeout(loadLibrary, 3000);
+    // Stop on a failed sync: the error is shown and the user retries explicitly.
+    _libPolling = (building || pending > 0) && st.state !== 'error';
+    if (_libPolling) {
+      _libPollTimer = setTimeout(loadLibrary, 1500);
+    } else {
+      $('#lib-status .notice.info')?.remove(); // keep any upload error notices
     }
+    $('#rebuild').disabled = building;
 
-    const docs = data.documents || [];
     $('#lib-table').innerHTML = docs.length
-      ? `<tr><th>Document</th><th>Size</th><th>Modified</th><th></th></tr>` +
+      ? `<tr><th>Document</th><th>Size</th><th>Modified</th><th>Search index</th><th></th></tr>` +
         docs.map((d) => `<tr>
-          <td>${esc(d.path)}</td><td>${d.size_kb} KB</td><td>${esc(d.modified)}</td>
-          <td style="text-align:right"><button class="btn danger small" data-del="${esc(d.path)}">Remove</button></td>
+          <td>${esc(d.path)}</td><td>${d.size_kb} KB</td><td>${esc(d.modified)}</td><td>${indexBadge(d)}</td>
+          <td style="text-align:right">${!isEditor() ? '' : _removing.has(d.path)
+            ? '<button class="btn danger small" disabled>Removing…</button>'
+            : `<button class="btn danger small" data-del="${esc(d.path)}">Remove</button>`}</td>
         </tr>`).join('')
       : '<tr><td class="empty">No framework documents yet. Add your policies, standards and templates.</td></tr>';
 
     $$('#lib-table button[data-del]').forEach((b) => b.addEventListener('click', async () => {
-      if (!confirm(`Remove "${b.dataset.del}" from the knowledge base?\n\nThis deletes the file from disk.`)) return;
+      const target = b.dataset.del;
+      if (!confirm(`Remove "${target}" from the knowledge base?\n\nThis deletes the file from disk.`)) return;
+      _removing.add(target);
       b.disabled = true;
+      b.textContent = 'Removing…';
       try {
-        await api(`/api/framework/document?path=${encodeURIComponent(b.dataset.del)}`, { method: 'DELETE' });
-        await loadLibrary();
+        const res = await fetch(`/api/framework/document?path=${encodeURIComponent(target)}`, { method: 'DELETE' });
+        if (res.status === 401) { toLogin(); return; }
+        // 404 means another tab (or a double click) already removed it - nothing to report.
+        if (!res.ok && res.status !== 404) {
+          let payload = null;
+          try { payload = await res.json(); } catch { /* non-JSON error body */ }
+          throw new Error(payload?.detail || `${res.status} ${res.statusText}`);
+        }
       } catch (err) {
         alert(err.message);
-        b.disabled = false;
+      } finally {
+        _removing.delete(target);
+        await loadLibrary();
       }
     }));
   } catch (err) {
-    $('#lib-status').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    // In #lib-notices so the next successful refresh clears it.
+    $('#lib-notices').innerHTML = `<div class="notice bad">Could not refresh the knowledge base: ${esc(err.message)}</div>`;
+    // One failed refresh must not stop tracking an update that is still running.
+    if (_libPolling) {
+      clearTimeout(_libPollTimer);
+      _libPollTimer = setTimeout(loadLibrary, 5000);
+    }
   }
 }
 
@@ -952,7 +995,30 @@ async function loadHealth() {
   }
 }
 
+// ---------------------------------------------------------------- session
+let currentUser = null;
+const isEditor = () => currentUser?.role === 'editor';
+
+async function loadSession() {
+  try {
+    currentUser = (await api('/api/auth/me')).user;
+  } catch {
+    return; // api() has already sent the browser to the sign-in page
+  }
+  $('.sidebar-foot').innerHTML = `
+    <div class="who">${esc(currentUser.name || currentUser.email)}</div>
+    <span class="badge ${isEditor() ? 'note' : 'info'} role">${isEditor() ? 'Editor' : 'Viewer'}</span><br>
+    <button type="button" id="sign-out">Sign out</button>`;
+  $('#sign-out').addEventListener('click', async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } finally { location.href = '/login'; }
+  });
+  // Viewers can browse the knowledge base but not change it; the server enforces this regardless.
+  $('#lib-upload-btn').classList.toggle('hidden', !isEditor());
+  $('#rebuild').classList.toggle('hidden', !isEditor());
+}
+
 // ---------------------------------------------------------------- boot
+loadSession();
 initSuggestions();
 loadRubrics().then(loadRubricDetail);
 loadHealth();

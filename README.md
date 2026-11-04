@@ -124,11 +124,29 @@ Open `.env.local` and paste a free API key from https://build.nvidia.com:
 NVIDIA_API_KEY=nvapi-your-key-here
 ```
 
+Add a session secret (it signs the sign-in cookies; changing it signs
+everyone out):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+```
+COMPASS_SESSION_SECRET=the-64-characters-printed-above
+```
+
+Create the first account. The password is generated and printed once —
+pass it on privately:
+
+```bash
+npm run users -- add you@vibha.org editor "Your Name"
+```
+
 ```bash
 npm run dev
 ```
 
-Open http://localhost:3000. Without a key the app still runs — structural
+Open http://localhost:3000 and sign in. Without a key the app still runs — structural
 checks, search and the framework library all work; only criterion scoring,
 Q&A and generation need it.
 
@@ -157,7 +175,7 @@ first draft of a Project Charter, Project Proposal, or Concept Note.
 source document and section.
 
 **Knowledge base** — add or remove framework documents and rebuild the
-index. No restart needed.
+index (editors only). No restart needed.
 
 **Rubrics** — see exactly what is being scored, with weights and criteria.
 
@@ -195,15 +213,50 @@ for the full shape), and it appears in the document-type list automatically.
 
 ---
 
+## Sign-in and roles
+
+Every page and API call needs a signed-in account.
+
+| Role | Can |
+|---|---|
+| `viewer` | Ask, Verify, Generate, and read everything (knowledge base list, rubrics, history, System) |
+| `editor` | Everything a viewer can, plus add, remove and rebuild knowledge base documents |
+
+Accounts live in `data/users.json` (scrypt password hashes, never plain
+text) and are managed from the command line on the server:
+
+```bash
+npm run users -- list
+npm run users -- add <email> <viewer|editor> [display name]
+npm run users -- role <email> <viewer|editor>
+npm run users -- reset <email>
+npm run users -- disable <email>
+npm run users -- enable <email>
+npm run users -- remove <email>
+```
+
+`role`, `reset`, `disable` and `remove` end that person's existing
+sign-ins immediately. Sessions last 12 hours. Five wrong passwords from one
+address (or twenty in total) lock the account for 15 minutes.
+
+`data/audit.log` records sign-ins, failed sign-ins, lockouts, account
+changes, knowledge base uploads, deletions and rebuilds, and blocked
+sensitive data — who and when, never passwords or the matched values.
+
+When serving to other machines, put it behind HTTPS so the cookie is marked
+`Secure`.
+
+---
+
 ## Privacy
 
 Everything runs locally except the judging, Q&A and generation calls to
 NVIDIA. Uploaded documents are deleted from disk immediately after
 processing; only the resulting JSON report is kept, in `data/reports/`.
 
-**Document text, and anything typed into the Generate tab, is sent to
-NVIDIA's hosted API.** Under NVIDIA's free developer tier that is not a
-private endpoint.
+**Document text, questions, and anything typed into the Generate tab are
+sent to NVIDIA's hosted API.** Under NVIDIA's free developer tier that is
+not a private endpoint.
 
 - Do not upload documents, or describe projects, containing child-level
   personal data, identifiable photographs, health or disability records, or
@@ -211,7 +264,37 @@ private endpoint.
 - Do not upload donor databases, HR records, government IDs, or credentials.
 - Use anonymised or aggregated data wherever the document allows it.
 
-`.env.local` is gitignored. It holds your API key — do not commit it.
+### Sensitive-data check
+
+As a safety net, `lib/sensitive.ts` screens text **on this server, before
+anything is sent to NVIDIA** — plain pattern checks, so the check itself
+sends nothing anywhere. It runs on knowledge base uploads (and on files
+copied straight into `frameworks/`, which are left out of the index),
+Verify uploads, Ask questions (including earlier turns of the
+conversation), and Generate descriptions.
+
+| Found | Result |
+|---|---|
+| Aadhaar numbers (checksum-validated) | Blocked |
+| Payment card numbers (Luhn-validated) | Blocked |
+| Passwords, API keys, private keys | Blocked |
+| Personal PAN numbers | Blocked |
+| Tables of personal records — a name column plus two or more of date of birth, age, class, gender, roll/admission number, parent/guardian, contact details, caste/religion/health, Aadhaar — with five or more filled rows | Blocked |
+| Three or more mobile numbers, ten or more email addresses, bank IFSC codes | Allowed, with a warning |
+
+Blocked actions are recorded in `data/audit.log` with the kind of data
+found, never the values. Messages tell the user what kind of data was
+found and to remove or anonymise it.
+
+**It is a safety net, not a guarantee.** It cannot recognise a child's
+name on its own, a photograph, a table inside a PDF (PDF text loses its
+column layout — records tables are recognised in Word, Excel, CSV,
+Markdown and tab-separated text), or data it has no pattern for. Staff remain responsible for following the rules
+above. If the rules change, bump `SCREEN_VERSION` in `lib/sensitive.ts` so
+knowledge base files indexed earlier are screened again.
+
+`.env.local` is gitignored. It holds your API key and session secret — do
+not commit it.
 
 ---
 
@@ -237,6 +320,10 @@ lib/
   docxEngine.ts        generic corporate-.docx-template filler
   report.ts           Markdown review memo
   uploads.ts           shared upload helpers
+  auth.ts              accounts, password checks, signed session cookies, audit log
+  sensitive.ts         local sensitive-data screening (Aadhaar, cards, credentials, records tables)
+middleware.ts          sign-in required for every page and API; same-site check on changes
+scripts/users.mjs      account management CLI (npm run users)
 public/app.js          UI logic (fetch calls against the Route Handlers above)
 frameworks/            the framework corpus (replace with yours)
 rubrics/                the scoreable framework, as YAML
@@ -260,3 +347,12 @@ data/                   generated: index, reports, generated drafts, credit ledg
   small, and the structural layer is exactly reproducible.
 - **The free tier is not production capacity.** Rate-limited per minute;
   fine for a team, not for open submission at scale.
+- **Knowledge base text is trusted.** Documents in the knowledge base are
+  given to the model as reference material. A document containing
+  instructions aimed at the model could steer answers — only editors can
+  add documents, so keep the editor role to people who curate them.
+- **Dependency notes.** `@xenova/transformers` (local embeddings) pulls in
+  older `protobufjs`/`sharp` versions flagged by `npm audit`; moving to its
+  successor `@huggingface/transformers` would clear them. A remaining
+  `postcss` advisory needs Next.js 16 and does not affect how this app uses
+  it.

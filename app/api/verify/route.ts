@@ -5,6 +5,8 @@ import { extract } from "@/lib/extract";
 import * as rubric from "@/lib/rubric";
 import * as evaluator from "@/lib/evaluate";
 import * as llm from "@/lib/llm";
+import * as sensitive from "@/lib/sensitive";
+import { audit, sessionUser } from "@/lib/auth";
 import { saveUpload, ApiError } from "@/lib/uploads";
 
 export const maxDuration = 300;
@@ -24,6 +26,13 @@ export async function POST(req: Request) {
     if (!doc.text.trim()) {
       return NextResponse.json({ detail: "No text could be read from this file. If it is a scanned PDF, run OCR first." }, { status: 400 });
     }
+    // Screened before any part of the document reaches the model.
+    const findings = sensitive.scanText(doc.text);
+    if (sensitive.blocking(findings).length) {
+      audit(sessionUser(req.headers.get("cookie"))?.email ?? null, "sensitive_blocked", { where: "verify", found: findings.map((f) => f.kind) });
+      return NextResponse.json({ detail: sensitive.blockedMessage("This document", findings) }, { status: 400 });
+    }
+    if (findings.length) doc.warnings.push(sensitive.warningMessage("This document", findings));
 
     const suggestions = rubric.suggest(doc.text);
     let chosen = rubricId;

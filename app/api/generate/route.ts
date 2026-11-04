@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import * as generation from "@/lib/generation";
 import * as llm from "@/lib/llm";
+import * as sensitive from "@/lib/sensitive";
+import { audit, sessionUser } from "@/lib/auth";
 
 export const maxDuration = 300;
 
@@ -10,6 +12,11 @@ export async function POST(req: Request) {
   const description = String(payload.description ?? "").trim();
   if (!docType) return NextResponse.json({ detail: "doc_type is required." }, { status: 400 });
   if (description.length > 8000) return NextResponse.json({ detail: "Description is too long (max 8000 characters)." }, { status: 400 });
+  const findings = sensitive.blocking(sensitive.scanText(description));
+  if (findings.length) {
+    audit(sessionUser(req.headers.get("cookie"))?.email ?? null, "sensitive_blocked", { where: "generate", found: findings.map((f) => f.kind) });
+    return NextResponse.json({ detail: sensitive.blockedMessage("The description", findings) }, { status: 400 });
+  }
 
   try {
     const result = await generation.generate(docType, description);
