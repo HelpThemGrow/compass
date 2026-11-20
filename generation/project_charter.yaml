@@ -1,0 +1,258 @@
+# ---------------------------------------------------------------------------
+# Project Charter — generation guide
+#
+# Matches doc_templates/project_charter.docx exactly - heading text, table
+# columns and section structure. Sourced from the real
+# D:\PM360\Project_Charter_Template.docx (2026-09-10), replacing the previous
+# guide built for an earlier, differently-structured charter template.
+#
+# This template mixes three physically different placeholder styles for
+# narrative content, which is why blocks below use three different `kind`
+# values for prose (see app/generation.py / app/docx_engine.py):
+#   - `paragraph`: a single bracketed instruction paragraph under the
+#     heading (Executive Summary; the intro line under Governance Structure).
+#   - `fields`: several individually-labelled "Label: [placeholder]" lines
+#     under one heading (Business Problem/Opportunity; Change Management;
+#     Project Closure) - each filled by matching its own label, not as a
+#     table.
+#   - `cover`: the document's very first table (Program/Initiative, Prepared
+#     By, Date, Version, Document Owner, Status) - a label/value table with
+#     no heading above it to walk forward from.
+#
+# The Approval & Authorization section's signature table is left completely
+# untouched, same principle as every signature table this app ever renders
+# into: a real person signs it.
+# ---------------------------------------------------------------------------
+
+id: project_charter
+name: Project Charter
+description: >-
+  Internal planning document establishing a new initiative's purpose, scope,
+  objectives, governance and success criteria before implementation begins.
+  Written for internal sign-off, not for an external funder.
+docx_template: project_charter.docx
+
+batches:
+  - id: cover_and_summary
+    title: Cover details and executive summary
+    blocks: [cover, executive_summary]
+  - id: problem_and_objectives
+    title: The problem and what this project will do
+    blocks: [business_problem, objectives]
+  - id: scope
+    title: Scope, assumptions and constraints
+    blocks: [in_scope, out_of_scope, assumptions, constraints]
+  - id: delivery
+    title: Deliverables, success and stakeholders
+    blocks: [deliverables, success_criteria, key_stakeholders]
+  - id: governance_and_planning
+    title: Governance, timeline and budget
+    blocks: [governance_narrative, governance_table, timeline, budget]
+  - id: risk_and_process
+    title: Risk, communication and change control
+    blocks: [risks, communication_plan, change_management, project_closure]
+
+sections:
+  - id: cover
+    heading: Cover Details
+    kind: cover
+    fields: ["Program / Initiative", "Prepared By", Date, Version, "Document Owner", Status]
+    guidance: >-
+      Program / Initiative is the project's name. Prepared By and Document
+      Owner are role-based (e.g. "Programme Manager") unless the description
+      names someone specific. Version is "1.0" for a first draft. Status is
+      "Draft for review".
+    framework_query: "project identification"
+
+  - id: executive_summary
+    heading: Executive Summary
+    kind: paragraph
+    guidance: >-
+      150-200 words: what the project is, why it matters for the children,
+      schools or programmes it serves, and the outcome expected at
+      completion. One flowing paragraph, not bullets.
+    framework_query: "project rationale mission alignment expected value"
+
+  - id: business_problem
+    heading: Business Problem / Opportunity
+    kind: fields
+    fields: ["Problem / Opportunity Statement", "Supporting Evidence", "Impact if Addressed"]
+    guidance: >-
+      Problem / Opportunity Statement: one or two sentences. Supporting
+      Evidence: the data, assessment results or feedback that supports the
+      need - a named, dated source wherever the description gives one.
+      Impact if Addressed: what improves for students, teachers, schools or
+      the programme.
+    framework_query: "evidence of need business impact opportunity"
+
+  - id: objectives
+    heading: Project Objectives
+    kind: bullets
+    count: [3, 5]
+    guidance: >-
+      3-5 SMART (Specific, Measurable, Achievable, Relevant, Time-bound)
+      objectives, each one sentence starting with an action verb.
+    framework_query: "project objectives goals"
+
+  - id: in_scope
+    heading: In Scope
+    kind: bullets
+    count: [3, 6]
+    heading_level: 2
+    guidance: >-
+      States/districts/schools/centres included, programmes and activities
+      included, and the user groups covered.
+    framework_query: "scope of work deliverables covered"
+
+  - id: out_of_scope
+    heading: Out of Scope
+    kind: bullets
+    count: [2, 5]
+    heading_level: 2
+    guidance: Geographies, grades or programmes explicitly excluded, and anything deferred to a future phase.
+    framework_query: "out of scope exclusions boundaries"
+
+  - id: assumptions
+    heading: Assumptions
+    kind: bullets
+    count: [3, 5]
+    heading_level: 2
+    guidance: >-
+      Conditions believed true but not yet confirmed - mark them clearly as
+      assumptions, not facts.
+    framework_query: "assumptions dependencies preconditions"
+
+  - id: constraints
+    heading: Constraints
+    kind: bullets
+    count: [2, 5]
+    heading_level: 2
+    guidance: Fixed limiting factors - budget ceiling, mandated calendar, infrastructure limits.
+    framework_query: "constraints limitations terms of reference"
+
+  - id: governance_narrative
+    heading: Governance Structure
+    kind: paragraph
+    guidance: >-
+      One paragraph: how the project will be governed - decision rights,
+      escalation path, and how it fits into the existing programme/
+      organisational hierarchy (national, state, district, school level).
+    framework_query: "governance decision rights escalation approval authority"
+
+  - id: change_management
+    heading: Change Management
+    kind: fields
+    fields: [Request, Review, Approval, Documentation]
+    guidance: >-
+      Request: how a change request is raised. Review: who reviews impact on
+      scope/budget/timeline/risk. Approval: who has authority to approve
+      changes. Documentation: where approved changes are logged.
+    framework_query: "change management change request approval process"
+
+  - id: project_closure
+    heading: Project Closure
+    kind: fields
+    fields: ["Closure Criteria", "Deliverable Acceptance", "Final Reporting", Handover, "Lessons Learned"]
+    guidance: >-
+      Closure Criteria: conditions for the project to be considered
+      complete. Deliverable Acceptance: how deliverables are reviewed and
+      accepted. Final Reporting: the final report/impact summary to be
+      produced. Handover: how the government/programme partner takes
+      ongoing ownership. Lessons Learned: how lessons are captured.
+    framework_query: "project closure handover lessons learned"
+
+tables:
+  - id: deliverables
+    heading: High-Level Deliverables
+    kind: list
+    columns: [Deliverable, Description, "Target Completion"]
+    count: [3, 6]
+    guidance: Concrete, named outputs. Description is one sentence stating what "done" looks like.
+    framework_query: "deliverables outputs"
+
+  - id: success_criteria
+    heading: Success Criteria
+    kind: list
+    columns: ["Success Criteria", "How It Will Be Measured", Target]
+    count: [3, 5]
+    guidance: Measurable conditions that define success, each with how it will be measured and a target.
+    framework_query: "success criteria measurable targets indicators"
+
+  - id: key_stakeholders
+    heading: Key Stakeholders
+    kind: list
+    columns: [Name, Role, "Organization / Program", "Interest / Stake"]
+    count: [4, 6]
+    guidance: >-
+      Real stakeholder ROLES relevant to this project, not invented names -
+      write "[Name]" for Name unless the description names someone. Role is
+      their function (e.g. "Project Sponsor", "Government Partner");
+      Interest / Stake is why they care.
+    framework_query: "stakeholders roles responsibilities"
+
+  - id: governance_table
+    heading: Governance Structure
+    kind: list
+    columns: ["Governance Body", Members, Frequency, Role]
+    count: [2, 3]
+    guidance: >-
+      Decision-making bodies (e.g. Steering Committee, Programme Management
+      Team) with meeting frequency and role. Members is role-based (e.g.
+      "Programme Lead, Finance Manager") unless the description names people.
+    framework_query: "governance decision rights escalation approval authority"
+
+  - id: timeline
+    heading: "High-Level Timeline & Milestones"
+    kind: list_by_key
+    key_column: Milestone
+    columns: [Milestone, "Target Date", Owner]
+    count: [5, 5]
+    guidance: >-
+      The template has exactly five fixed milestone rows already in place -
+      Charter approved, Planning & design complete, Pilot / rollout launch,
+      Mid-term review, Project closure - and this fills in Target Date and
+      Owner for each. Produce exactly 5 rows, one per milestone in that
+      order, each with "Milestone" set to exactly one of those five phrases.
+      Target Date is relative (e.g. "Month 2") unless the description gives
+      real dates. Owner is role-based unless a name is given.
+    framework_query: "timeline milestones phases implementation plan"
+
+  - id: budget
+    heading: "Budget (High-Level)"
+    kind: list_by_key
+    key_column: "Budget Category"
+    columns: ["Budget Category", "Estimated Amount", Notes]
+    count: [7, 7]
+    guidance: >-
+      The template has exactly seven fixed category rows already in place -
+      Personnel / Volunteer Support, Program Materials, Technology /
+      Infrastructure, Training, Monitoring & Evaluation, Contingency, and
+      Total - and this fills in Estimated Amount and Notes for each.
+      Produce exactly 7 rows, one per category in that order, each with
+      "Budget Category" set to exactly one of those seven phrases. For
+      Total, state the total if the description gives one, or your best
+      sum of the other categories - it will be recomputed automatically
+      regardless. Use "To be estimated" rather than inventing a figure the
+      description does not support.
+    framework_query: "budget cost categories overhead limit value for money"
+
+  - id: risks
+    heading: "Risks (High-Level)"
+    kind: list
+    columns: [Risk, Likelihood, Impact, "Mitigation Strategy"]
+    count: [3, 5]
+    guidance: >-
+      Likelihood and Impact are each "Low", "Medium" or "High". Risks
+      specific to this project and context, not generic boilerplate.
+    framework_query: "risk management risk register contextual risk"
+
+  - id: communication_plan
+    heading: Communication Plan
+    kind: list
+    columns: [Audience, "Information Shared", Frequency, Channel, Owner]
+    count: [3, 5]
+    guidance: >-
+      Named audiences (e.g. Steering Committee, Programme Team, Government
+      Partners, Donors/Board) each with what's shared, how often, and
+      through what channel.
+    framework_query: "communication reporting cadence stakeholder updates"

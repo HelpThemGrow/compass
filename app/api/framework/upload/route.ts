@@ -2,12 +2,21 @@ import { NextResponse } from "next/server";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+<<<<<<< HEAD
 import { settings } from "@/lib/server/config";
 import * as ingest from "@/lib/server/ingest";
 import * as sensitive from "@/lib/server/sensitive";
 import { SUPPORTED, extract } from "@/lib/server/extract";
 import { safeName, resolveIn, MAX_UPLOAD_BYTES } from "@/lib/server/uploads";
 import { AuthError, audit, requireUser } from "@/lib/server/auth";
+=======
+import { settings } from "@/lib/config";
+import * as ingest from "@/lib/ingest";
+import * as sensitive from "@/lib/sensitive";
+import { SUPPORTED, extract } from "@/lib/extract";
+import { safeName, resolveIn, MAX_UPLOAD_BYTES } from "@/lib/uploads";
+import { AuthError, audit, requireUser } from "@/lib/auth";
+>>>>>>> 32f2f75
 
 /**
  * Saves the files and returns straight away; only the new files are then

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import * as evaluator from "@/lib/server/evaluate";
 import { toMarkdown, filenameFor } from "@/lib/server/report";
+=======
+import * as evaluator from "@/lib/evaluate";
+import { toMarkdown, filenameFor } from "@/lib/report";
+>>>>>>> 32f2f75
 
 const VALID = /^[0-9a-f]{1,32}$/;
 

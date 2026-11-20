@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
+<<<<<<< HEAD
 import { settings } from "@/lib/server/config";
 import { extract } from "@/lib/server/extract";
 import * as rubric from "@/lib/server/rubric";
@@ -9,6 +10,16 @@ import * as sensitive from "@/lib/server/sensitive";
 import { audit, sessionUser } from "@/lib/server/auth";
 import { saveUpload, ApiError } from "@/lib/server/uploads";
 import { ndjsonResponse } from "@/lib/server/stream";
+=======
+import { settings } from "@/lib/config";
+import { extract } from "@/lib/extract";
+import * as rubric from "@/lib/rubric";
+import * as evaluator from "@/lib/evaluate";
+import * as llm from "@/lib/llm";
+import * as sensitive from "@/lib/sensitive";
+import { audit, sessionUser } from "@/lib/auth";
+import { saveUpload, ApiError } from "@/lib/uploads";
+>>>>>>> 32f2f75
 
 export const maxDuration = 300;
 
@@ -49,6 +60,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ detail: (exc as Error).message }, { status: 400 });
     }
 
+<<<<<<< HEAD
     const options = {
       filename: file.name || "upload",
       evidencePerCriterion: Math.max(1, Math.min(6, evidencePerCriterion)),
@@ -67,6 +79,16 @@ export async function POST(req: Request) {
 
     try {
       const result = await evaluator.evaluate(doc, selected, options);
+=======
+    try {
+      const result = await evaluator.evaluate(doc, selected, {
+        filename: file.name || "upload",
+        evidencePerCriterion: Math.max(1, Math.min(6, evidencePerCriterion)),
+        skipLlm,
+        rubricSuggestions: suggestions,
+        autoSelected: rubricId === "" || rubricId === "auto",
+      });
+>>>>>>> 32f2f75
       return NextResponse.json(result);
     } catch (exc) {
       if (exc instanceof llm.BudgetExhausted) return NextResponse.json({ detail: exc.message }, { status: 429 });

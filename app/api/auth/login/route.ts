@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import { AuthError, clientIp, createSessionToken, hasAccounts, isHttps, login, sessionCookie } from "@/lib/server/auth";
+=======
+import { AuthError, clientIp, createSessionToken, hasAccounts, isHttps, login, sessionCookie } from "@/lib/auth";
+>>>>>>> 32f2f75
 
 export async function POST(req: Request) {
   const payload = await req.json().catch(() => ({}));

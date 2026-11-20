@@ -1,10 +1,13 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+<<<<<<< HEAD
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+=======
+>>>>>>> 32f2f75
 
 /** Only same-site paths are allowed as the post-sign-in destination. */
 function safeNext(): string {
@@ -48,6 +51,7 @@ export default function LoginPage() {
   }
 
   return (
+<<<<<<< HEAD
     <div className="grid min-h-screen place-items-center bg-sidebar p-6">
       <Card className="w-full max-w-sm gap-4 py-6">
         <form className="grid gap-4 px-6" onSubmit={submit}>
@@ -77,6 +81,28 @@ export default function LoginPage() {
           </Button>
         </form>
       </Card>
+=======
+    <div className="login-shell">
+      <form className="login-panel" onSubmit={submit}>
+        <div className="login-brand">
+          <img src="/vibha-logo.png" alt="Vibha" />
+          <strong>Compass</strong>
+        </div>
+        <p className="lead">Sign in to continue.</p>
+        <div className="field">
+          <label htmlFor="email">Email</label>
+          <input id="email" type="text" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} autoFocus />
+        </div>
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input id="password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </div>
+        {error && <div className="notice bad">{error}</div>}
+        <button className="btn" type="submit" disabled={busy || !email || !password}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+>>>>>>> 32f2f75
     </div>
   );
 }

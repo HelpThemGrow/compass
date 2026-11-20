@@ -1,0 +1,1024 @@
+'use strict';
+
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+function esc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+// Citations and evidence locations are built from extracted document
+// headings, which sometimes carry raw Markdown emphasis (a numbered list
+// item like "2. **Build the Pitch.** ..." is treated as a heading). Strip
+// that before showing the label as plain text. Only double-marker bold and
+// backtick code are handled - single `*`/`_` are left alone because a
+// filename like "14_project_proposal_review_process.md" would otherwise
+// have its underscores eaten as italic delimiters.
+function stripMd(value) {
+  return String(value ?? '')
+    .replace(/(^|\n)[ \t]*#{1,6}[ \t]+/g, '$1')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/__(.+?)__/g, '$1')
+    .replace(/`(.+?)`/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Shared KPI-card icon: one glyph, recoloured per card via the kpi-N accent
+// classes already cycling on `.stat` (see style.css). A different icon per
+// metric would need each call site to know what the metric means; this
+// keeps the icon purely decorative and the accent colour doing the work of
+// telling cards apart.
+const STAT_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>';
+
+function statIcon() {
+  return `<span class="stat-ico">${STAT_ICON}</span>`;
+}
+
+function toLogin() {
+  location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, options);
+  if (res.status === 401) {
+    toLogin();
+    throw new Error('Your session has ended. Please sign in again.');
+  }
+  let payload = null;
+  try { payload = await res.json(); } catch { /* non-JSON error body */ }
+  if (!res.ok) {
+    throw new Error(payload?.detail || `${res.status} ${res.statusText}`);
+  }
+  return payload;
+}
+
+// Mirrors the four bands in app/config.py's Settings.bands (85/70/55/0 ->
+// Board Ready/Minor Revisions/Major Revisions/Not Ready) with four distinct
+// colours, not three - collapsing "Minor Revisions" and "Major Revisions"
+// into the same amber made two meaningfully different outcomes look
+// identical at a glance, which defeats the point of colour-coding at all.
+function bandClass(score) {
+  if (score >= 85) return 'good';
+  if (score >= 70) return 'note';
+  if (score >= 55) return 'warn';
+  return 'bad';
+}
+
+// A structural-only pass must not be coloured like an endorsement — it says
+// nothing about the substance of the document.
+const isStructuralOnly = (r) => r.band === 'Structural check only';
+
+function severityClass(sev) {
+  return { blocker: 'bad', major: 'warn', minor: 'info', info: 'info' }[sev] || 'info';
+}
+
+// ---------------------------------------------------------------- tabs
+$$('nav button').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    $$('nav button').forEach((b) => b.classList.remove('active'));
+    $$('.tab').forEach((t) => t.classList.remove('active'));
+    btn.classList.add('active');
+    $(`#tab-${btn.dataset.tab}`).classList.add('active');
+    if (btn.dataset.tab === 'library') loadLibrary();
+    if (btn.dataset.tab === 'history') loadHistory();
+    if (btn.dataset.tab === 'system') loadHealth();
+    if (btn.dataset.tab === 'rubrics') loadRubricDetail();
+    if (btn.dataset.tab === 'generate') loadGenerateHistory();
+  });
+});
+
+// ---------------------------------------------------------------- upload
+let chosenFile = null;
+const drop = $('#drop');
+const fileInput = $('#file');
+
+drop.addEventListener('click', () => fileInput.click());
+drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', (e) => {
+  e.preventDefault();
+  drop.classList.remove('over');
+  if (e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) setFile(fileInput.files[0]);
+});
+
+function setFile(file) {
+  chosenFile = file;
+  $('#file-name').textContent = `${file.name} · ${(file.size / 1024).toFixed(0)} KB`;
+  $('#run').disabled = false;
+}
+
+// ---------------------------------------------------------------- verify
+$('#run').addEventListener('click', async () => {
+  if (!chosenFile) return;
+
+  const status = $('#verify-status');
+  const skipLlm = $('#skip-llm').checked;
+  $('#run').disabled = true;
+  $('#result').innerHTML = '';
+  status.classList.remove('hidden');
+
+  const steps = skipLlm
+    ? ['Reading the document…', 'Running structural checks…']
+    : ['Reading the document…', 'Indexing the submission…', 'Gathering evidence per criterion…',
+       'Judging against the framework…', 'Writing the review…'];
+  let step = 0;
+  status.innerHTML = `<span class="spinner"></span> ${steps[0]}`;
+  const ticker = setInterval(() => {
+    step = Math.min(step + 1, steps.length - 1);
+    status.innerHTML = `<span class="spinner"></span> ${steps[step]}`;
+  }, skipLlm ? 1200 : 7000);
+
+  const body = new FormData();
+  body.append('file', chosenFile);
+  body.append('rubric_id', $('#rubric').value);
+  body.append('skip_llm', skipLlm ? 'true' : 'false');
+  body.append('evidence_per_criterion', $('#evidence').value);
+
+  try {
+    const result = await api('/api/verify', { method: 'POST', body });
+    renderResult(result);
+  } catch (err) {
+    $('#result').innerHTML = `<div class="panel"><div class="notice bad">
+      <b>Review failed.</b><br>${esc(err.message)}</div></div>`;
+  } finally {
+    clearInterval(ticker);
+    status.classList.add('hidden');
+    $('#run').disabled = false;
+  }
+});
+
+function dial(score, neutral = false) {
+  const r = 56, c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(100, score)) / 100;
+  const colour = neutral ? '#8a93a8' : { good: '#28a745', warn: '#f4a62a', bad: '#d9534f' }[bandClass(score)];
+  return `<div class="dial">
+    <svg width="132" height="132" viewBox="0 0 132 132">
+      <circle cx="66" cy="66" r="${r}" fill="none" stroke="#eef1f6" stroke-width="11"/>
+      <circle cx="66" cy="66" r="${r}" fill="none" stroke="${colour}" stroke-width="11"
+        stroke-linecap="round" stroke-dasharray="${(c * pct).toFixed(1)} ${c.toFixed(1)}"/>
+    </svg>
+    <div class="val"><b>${score}</b><span>out of 100</span></div>
+  </div>`;
+}
+
+function renderResult(r) {
+  const s = r.summary || {};
+  const det = r.deterministic || {};
+  const failures = (det.findings || []).filter((f) => f.status !== 'pass');
+
+  const parts = [];
+
+  // --- headline
+  parts.push(`<div class="panel">
+    <div class="score-head">
+      ${dial(r.overall_score, isStructuralOnly(r))}
+      <div style="flex:1;min-width:240px">
+        <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.35rem">
+          <h2 style="margin:0">${esc(r.filename)}</h2>
+          <span class="badge ${isStructuralOnly(r) ? 'info' : bandClass(r.overall_score)}">${esc(r.band)}</span>
+        </div>
+        <p class="lead" style="margin-bottom:.4rem">${esc(r.band_note)}</p>
+        <div class="muted">Assessed against <b>${esc(r.rubric_name)}</b> v${esc(r.rubric_version)}
+          ${r.auto_selected ? '(detected automatically)' : ''} · ${esc(r.created_at)}</div>
+        <div class="sub-scores">
+          <div>Framework criteria<br><b>${r.content_score}</b>/100</div>
+          <div>Structural completeness<br><b>${r.structure_score}</b>/100</div>
+          <div>Words<br><b>${(det.word_count || 0).toLocaleString()}</b></div>
+          <div>Model calls used<br><b>${r.stats?.api_calls ?? 0}</b></div>
+        </div>
+      </div>
+    </div>
+    ${r.capped_reason ? `<div class="notice bad"><b>Rating capped.</b> ${esc(r.capped_reason)}</div>` : ''}
+    ${r.auto_selected && r.rubric_suggestions?.[0]?.close_call ? `<div class="notice">
+      <b>Rubric detection was not clear-cut.</b> This was assessed as
+      <b>${esc(r.rubric_name)}</b>, but it also resembles
+      ${esc(r.rubric_suggestions[1]?.name || 'another document type')}.
+      If that is the wrong standard, choose the rubric explicitly above and run it again.</div>` : ''}
+    ${(r.warnings || []).map((w) => `<div class="notice">${esc(w)}</div>`).join('')}
+    <div class="toolbar" style="margin-top:.9rem">
+      <a class="btn ghost small" style="text-decoration:none"
+         href="/api/evaluations/${encodeURIComponent(r.id)}/markdown">Download review memo</a>
+      ${(r.rubric_suggestions || []).length > 1 ? `<button class="btn ghost small" id="rerun-other">Reassess with a different rubric</button>` : ''}
+    </div>
+  </div>`);
+
+  // --- summary + actions
+  if (s.overall_summary) {
+    parts.push(`<div class="panel">
+      <h2>Summary</h2>
+      <p class="lead">${esc(s.overall_summary)}</p>
+      ${(s.strengths || []).length ? `<h3 style="margin-top:1rem">What is working</h3>
+        <ul class="plain">${s.strengths.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+      ${(s.priority_actions || []).length ? `<h3 style="margin-top:1rem">Do these first</h3>
+        <ol class="actions">${s.priority_actions.map((a) => `<li>
+          <b>${esc(a.action)}</b>
+          <span class="why">${esc(a.why_it_matters)}</span>
+          <div class="tags">
+            <span class="tag">effort: ${esc(a.effort || 'medium')}</span>
+            ${(a.criterion_ids || []).map((id) => `<span class="tag">${esc(id)}</span>`).join('')}
+          </div></li>`).join('')}</ol>` : ''}
+      ${s.reviewer_note ? `<div class="notice info" style="margin-top:1rem">
+        <b>For the reviewing committee:</b> ${esc(s.reviewer_note)}</div>` : ''}
+    </div>`);
+  }
+
+  // --- dimensions
+  const structural = isStructuralOnly(r);
+  if ((r.dimensions || []).length) {
+    parts.push(`<div class="panel">
+      <h2>Scores by dimension</h2>
+      ${structural ? '<p class="muted">Content was not scored, so these are not real dimension results.</p>' : ''}
+      <div class="bars">${r.dimensions.map((d) => `
+        <div class="bar-row">
+          <span>${esc(d.name)} <span class="muted">· weight ${d.weight}</span></span>
+          <div class="bar-track"><div class="bar-fill ${structural ? 'info' : bandClass(d.score)}" style="width:${structural ? 0 : d.score}%"></div></div>
+          <span class="n">${structural ? '—' : d.score}</span>
+        </div>`).join('')}</div>
+    </div>`);
+  }
+
+  // --- structural
+  parts.push(`<div class="panel">
+    <h2>Structural checks</h2>
+    <p class="muted">Run by parsing the document. No model involved, so these results are identical every time.</p>
+    ${(det.missing_sections || []).length ? `<div class="notice bad">
+      <b>Missing required sections:</b> ${det.missing_sections.map(esc).join(', ')}</div>` : ''}
+    ${failures.length ? `<div class="scroll-x"><table>
+      <tr><th>Severity</th><th>Check</th><th>Finding</th><th>Fix</th></tr>
+      ${failures.map((f) => `<tr>
+        <td><span class="badge ${severityClass(f.severity)}">${esc(f.severity)}</span></td>
+        <td>${esc(f.title)}</td>
+        <td>${esc(f.detail)}</td>
+        <td>${esc(f.remedy)}</td>
+      </tr>`).join('')}
+    </table></div>` : '<p class="lead">All structural checks passed.</p>'}
+  </div>`);
+
+  // --- criteria
+  if ((r.dimensions || []).length) {
+    parts.push(`<div class="panel">
+      <div class="panel-head"><h2>Criterion-by-criterion findings</h2>
+        <button class="btn ghost small" id="expand-all">Expand all</button></div>
+      ${r.dimensions.map((d) => {
+        const weak = d.criteria.filter((c) => c.score < 3 && c.verdict !== 'not_applicable').length;
+        const countBadge = structural
+          ? '<span class="badge info">not scored</span>'
+          : weak
+            ? `<span class="badge bad">${weak} to address</span>`
+            : '<span class="badge good">clear</span>';
+        return `<details class="dim" ${weak && !structural ? 'open' : ''}>
+          <summary>
+            <span>${esc(d.name)}</span>
+            <span class="spacer"></span>
+            ${countBadge}
+            <span class="badge ${structural ? 'info' : bandClass(d.score)}">${structural ? '—' : `${d.score}/100`}</span>
+          </summary>
+          <div class="dim-body">${d.criteria.map((c) => renderCriterion(c, structural)).join('')}</div>
+        </details>`;
+      }).join('')}
+    </div>`);
+  }
+
+  $('#result').innerHTML = parts.join('');
+
+  const expand = $('#expand-all');
+  if (expand) {
+    expand.addEventListener('click', () => {
+      const items = $$('details.dim');
+      const openAll = items.some((d) => !d.open);
+      items.forEach((d) => { d.open = openAll; });
+      expand.textContent = openAll ? 'Collapse all' : 'Expand all';
+    });
+  }
+
+  const rerun = $('#rerun-other');
+  if (rerun) {
+    rerun.addEventListener('click', () => {
+      $('#rubric').focus();
+      $('#upload-panel').scrollIntoView({ behavior: 'smooth' });
+    });
+  }
+
+  $('#result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+const VERDICTS = {
+  met: ['Met', 'good'],
+  partially_met: ['Partially met', 'warn'],
+  not_met: ['Not met', 'bad'],
+  not_applicable: ['Not applicable', 'info'],
+};
+
+function renderCriterion(c, structural = false) {
+  // A structural-only run never judged content: every criterion carries the
+  // same fallback score=0/verdict=not_met (app/evaluate.py's
+  // _fallback_results), which would otherwise render identically to a
+  // document that was actually judged and failed everything. Showing "not
+  // assessed" instead of a fabricated-looking "Not met · 0/4" is the whole
+  // point of the "Structural check only" band existing.
+  const [label, cls] = structural ? ['Not assessed', 'info'] : (VERDICTS[c.verdict] || ['Unknown', 'info']);
+  const pill = structural ? 'na' : c.verdict === 'not_applicable' ? 'na' : `s${c.score}`;
+  const pillText = structural ? '—' : c.verdict === 'not_applicable' ? 'n/a' : `${c.score}/4`;
+  return `<div class="crit">
+    <div class="crit-head">
+      <code>${esc(c.id)}</code>
+      <span class="pill ${pill}">${pillText}</span>
+      <span class="badge ${cls}">${label}</span>
+      ${structural ? '' : `<span class="muted">confidence: ${esc(c.confidence)}</span>`}
+    </div>
+    <div class="req">${esc(c.requirement)}</div>
+    ${c.evidence_verified === false
+      ? `<blockquote><i>The quote cited for this criterion could not be located in the document.
+           This score is unverified — check it by hand.</i></blockquote>`
+      : c.evidence_quote
+        ? `<blockquote>${esc(c.evidence_quote)}${c.evidence_location ? `<cite>found in: ${esc(stripMd(c.evidence_location))}</cite>` : ''}</blockquote>`
+        : `<blockquote><i>No supporting evidence found in the document.</i></blockquote>`}
+    ${c.gap ? `<div class="kv"><b>Gap:</b> ${esc(c.gap)}</div>` : ''}
+    ${c.recommended_fix ? `<div class="kv"><b>Fix:</b> ${esc(c.recommended_fix)}</div>` : ''}
+    ${(c.framework_refs || []).length ? `<div class="muted" style="margin-top:.3rem">Framework: ${c.framework_refs.map((r) => esc(stripMd(r))).join('; ')}</div>` : ''}
+  </div>`;
+}
+
+// ---------------------------------------------------------------- generate
+async function loadGenerateTypes() {
+  try {
+    const data = await api('/api/generate/types');
+    const types = data.types || [];
+    $('#gen-type').innerHTML = types.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')
+      || '<option value="">No document types available</option>';
+  } catch (err) {
+    $('#gen-type').innerHTML = `<option value="">${esc(err.message)}</option>`;
+  }
+}
+
+$('#gen-run').addEventListener('click', async () => {
+  const docType = $('#gen-type').value;
+  const description = $('#gen-description').value.trim();
+  if (!docType) return;
+  if (description.length < 20) {
+    alert('Add a bit more detail — at least a couple of sentences about the project.');
+    return;
+  }
+
+  const btn = $('#gen-run');
+  const status = $('#gen-status');
+  btn.disabled = true;
+  $('#gen-result').innerHTML = '';
+  status.classList.remove('hidden');
+
+  const steps = ['Reading the framework for relevant standards…', 'Drafting the narrative sections…',
+    'Drafting objectives, scope and constraints…', 'Drafting deliverables and governance…',
+    'Filling in identification and tables…', 'Finishing up…'];
+  let step = 0;
+  status.innerHTML = `<span class="spinner"></span> ${steps[0]}`;
+  const ticker = setInterval(() => {
+    step = Math.min(step + 1, steps.length - 1);
+    status.innerHTML = `<span class="spinner"></span> ${steps[step]}`;
+  }, 18000);
+
+  try {
+    const result = await api('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doc_type: docType, description }),
+    });
+    renderGenerated(result);
+    loadGenerateHistory();
+  } catch (err) {
+    $('#gen-result').innerHTML = `<div class="panel"><div class="notice bad">
+      <b>Generation failed.</b><br>${esc(err.message)}</div></div>`;
+  } finally {
+    clearInterval(ticker);
+    status.classList.add('hidden');
+    btn.disabled = false;
+  }
+});
+
+function renderGenerated(doc) {
+  const parts = [];
+
+  parts.push(`<div class="panel">
+    <div class="panel-head">
+      <h2 style="margin:0">${esc(doc.doc_name)}</h2>
+    </div>
+    <p class="muted">Drafted ${esc(doc.created_at)} · ${doc.stats?.api_calls ?? 0} model call(s) ·
+      ${doc.stats?.elapsed_s ?? '?'}s</p>
+    ${(doc.warnings || []).map((w) => `<div class="notice">${esc(w)}</div>`).join('')}
+    <div class="notice info">This is a first draft, grounded in the framework where it could be —
+      review it, fill in anything marked "To be determined" or "Pending", and have it checked by
+      the Programme Committee before relying on it. If you download the Word file, right-click the
+      Table of Contents and choose "Update Field" to refresh the page numbers.</div>
+    <div class="toolbar" style="margin-top:.7rem">
+      <a class="btn small" style="text-decoration:none" href="/api/generate/${encodeURIComponent(doc.id)}/docx">Download Word (.docx)</a>
+      <a class="btn ghost small" style="text-decoration:none" href="/api/generate/${encodeURIComponent(doc.id)}/markdown">Download Markdown</a>
+    </div>
+  </div>`);
+
+  parts.push(`<div class="panel">
+    <h2>Draft content</h2>
+    ${Object.entries(doc.blocks || {}).map(([bid, block]) => {
+      const value = doc.content?.[bid];
+      if (!value || (Array.isArray(value) && !value.length) || (typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length)) return '';
+      let body = '';
+      if (block.kind === 'bullets') {
+        body = `<ul class="plain">${value.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;
+      } else if (block.kind === 'key_value') {
+        body = `<table>${(block.fields || []).filter((f) => value[f]).map((f) => `
+          <tr><th style="white-space:nowrap">${esc(f)}</th><td>${esc(value[f])}</td></tr>`).join('')}</table>`;
+      } else if (block.kind === 'list') {
+        const cols = block.columns || [];
+        body = `<div class="scroll-x"><table>
+          <tr>${cols.map((c) => `<th>${esc(c)}</th>`).join('')}</tr>
+          ${value.map((row) => `<tr>${cols.map((c) => `<td>${esc(row[c] ?? '')}</td>`).join('')}</tr>`).join('')}
+        </table></div>`;
+      }
+      return `<details class="dim" open><summary><span>${esc(block.heading)}</span></summary>
+        <div class="dim-body">${body}</div></details>`;
+    }).join('')}
+  </div>`);
+
+  $('#gen-result').innerHTML = parts.join('');
+  $('#gen-result').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadGenerateHistory() {
+  try {
+    const data = await api('/api/generate');
+    const rows = data.generated || [];
+    $('#gen-history-table').innerHTML = rows.length
+      ? '<tr><th>Type</th><th>Description</th><th>Created</th><th></th></tr>' +
+        rows.map((g) => `<tr>
+          <td>${esc(g.doc_name)}</td>
+          <td>${esc(g.description)}${g.description?.length >= 140 ? '…' : ''}</td>
+          <td>${esc(g.created_at)}</td>
+          <td style="text-align:right">
+            <button class="btn ghost small" data-open-gen="${esc(g.id)}">Open</button>
+            <a class="btn ghost small" style="text-decoration:none" href="/api/generate/${encodeURIComponent(g.id)}/docx">Word</a>
+          </td>
+        </tr>`).join('')
+      : '<tr><td class="empty">No drafts generated yet.</td></tr>';
+
+    $$('#gen-history-table button[data-open-gen]').forEach((b) => b.addEventListener('click', async () => {
+      try {
+        const full = await api(`/api/generate/${encodeURIComponent(b.dataset.openGen)}`);
+        renderGenerated(full);
+      } catch (err) {
+        alert(err.message);
+      }
+    }));
+  } catch (err) {
+    $('#gen-history-table').innerHTML = `<tr><td class="empty">${esc(err.message)}</td></tr>`;
+  }
+}
+
+loadGenerateTypes();
+
+// ---------------------------------------------------------------- ask
+const history = [];
+
+const SUGGESTIONS = [
+  'What must a partner provide for due diligence?',
+  'What are the requirements of New Proposal',
+  'What must a theory of change contain?',
+];
+
+function initSuggestions() {
+  $('#suggest').innerHTML = SUGGESTIONS.map((q) => `<button>${esc(q)}</button>`).join('');
+  $$('#suggest button').forEach((b) => b.addEventListener('click', () => {
+    $('#question').value = b.textContent;
+    askQuestion();
+  }));
+}
+
+$('#ask').addEventListener('click', askQuestion);
+$('#question').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) askQuestion();
+});
+
+async function askQuestion() {
+  const box = $('#question');
+  const question = box.value.trim();
+  if (!question) return;
+
+  $('#chat-empty')?.remove();
+  const chat = $('#chat');
+  box.value = '';
+  $('#ask').disabled = true;
+
+  chat.insertAdjacentHTML('beforeend', `<div class="msg user">${esc(question)}</div>`);
+  const pending = document.createElement('div');
+  pending.className = 'msg bot';
+  pending.innerHTML = '<span class="spinner"></span> Finding the relevant policies…';
+  chat.appendChild(pending);
+  chat.scrollTop = chat.scrollHeight;
+
+  // Follow the answer as it grows, unless the reader has scrolled up to read.
+  const nearBottom = () => chat.scrollHeight - chat.scrollTop - chat.clientHeight < 80;
+  let answer = '';
+  let sources = [];
+  let finished = null;
+  let renderQueued = false;
+  const render = () => {
+    renderQueued = false;
+    const follow = nearBottom();
+    pending.innerHTML = `<div class="body">${renderMarkdown(answer)}${finished ? '' : '<span class="stream-cursor"></span>'}</div>
+      ${finished ? sourcesHtml(sources) : ''}`;
+    if (follow) chat.scrollTop = chat.scrollHeight;
+  };
+
+  try {
+    const res = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, history: history.slice(-8) }),
+    });
+    if (res.status === 401) {
+      toLogin();
+      return;
+    }
+    if (!res.ok || !res.body) {
+      let payload = null;
+      try { payload = await res.json(); } catch { /* non-JSON error body */ }
+      throw new Error(payload?.detail || `${res.status} ${res.statusText}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffered = '';
+    const handle = (event) => {
+      if (event.type === 'sources') {
+        sources = event.sources || [];
+        if (!answer) {
+          pending.innerHTML = `<span class="spinner"></span> Reading ${sources.length} relevant document${sources.length === 1 ? '' : 's'} and writing the answer…`;
+        }
+      } else if (event.type === 'delta') {
+        answer += event.text;
+        if (!renderQueued) {
+          renderQueued = true;
+          requestAnimationFrame(render);
+        }
+      } else if (event.type === 'done') {
+        finished = event;
+      } else if (event.type === 'error') {
+        throw new Error(event.message);
+      }
+    };
+
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value, { stream: true });
+      let nl;
+      while ((nl = buffered.indexOf('\n')) !== -1) {
+        const line = buffered.slice(0, nl).trim();
+        buffered = buffered.slice(nl + 1);
+        if (line) handle(JSON.parse(line));
+      }
+    }
+    if (buffered.trim()) handle(JSON.parse(buffered));
+
+    finished = finished || {};
+    render();
+    history.push({ role: 'user', content: question });
+    history.push({ role: 'assistant', content: answer });
+    if (finished.credits_remaining !== undefined) {
+      $('#ask-meta').textContent = `${finished.credits_remaining} model calls remaining in budget`;
+    }
+  } catch (err) {
+    pending.innerHTML = `${answer ? `<div class="body">${renderMarkdown(answer)}</div>` : ''}<div class="notice bad">${esc(err.message)}</div>`;
+  } finally {
+    $('#ask').disabled = false;
+  }
+}
+
+function sourcesHtml(srcs) {
+  if (!srcs.length) return '';
+  return `<details class="sources">
+    <summary>${srcs.length} source${srcs.length === 1 ? '' : 's'} used</summary>
+    ${srcs.map((s) => `<div class="src">
+      <div class="cite">[${s.n}] ${esc(stripMd(s.citation))}
+        <span class="tag">${s.kind === 'document' ? 'full document' : 'extract'}</span></div>
+      <div class="ex">${s.kind === 'document' && s.heading ? `<b>Most relevant section:</b> ${esc(stripMd(s.heading))} — ` : ''}${esc(stripMd(s.excerpt))}${s.excerpt.length >= 500 ? '…' : ''}</div>
+    </div>`).join('')}
+  </details>`;
+}
+
+// Inline Markdown on text that has ALREADY been HTML-escaped, so the only
+// tags that can appear are the ones added here.
+function inlineMd(escaped) {
+  return escaped
+    .split(/(`[^`]+`)/)
+    .map((part) => {
+      if (/^`[^`]+`$/.test(part)) return `<code>${part.slice(1, -1)}</code>`;
+      return part
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        .replace(/(^|[^*\w])\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, '$1<em>$2</em>')
+        .replace(/\[(\d+(?:\s*[,;]\s*(?:\d+|(?:Section|Sec\.?|§)\s*[\w.–-]+))*)\]/g, '<sup class="cite-ref">[$1]</sup>');
+    })
+    .join('');
+}
+
+const TABLE_ROW = /^\s*\|.*\|\s*$/;
+const TABLE_DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$/;
+
+function tableCells(line) {
+  return line.trim().replace(/^\||\|$/g, '').split('|').map((c) => inlineMd(c.trim()));
+}
+
+// Model answers are Markdown: headings, bullet/numbered lists (nested by
+// indentation), bold/italic, tables, blockquotes and [n] citations. Links and
+// raw HTML are deliberately not supported - everything is escaped first.
+function renderMarkdown(src) {
+  const lines = esc(String(src ?? '').replace(/\r\n?/g, '\n')).split('\n');
+  const out = [];
+  const lists = [];
+  let para = [];
+  let quote = [];
+
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${inlineMd(para.join(' '))}</p>`);
+    para = [];
+  };
+  const flushQuote = () => {
+    if (quote.length) out.push(`<blockquote>${inlineMd(quote.join(' '))}</blockquote>`);
+    quote = [];
+  };
+  const closeLists = (downTo = -1) => {
+    while (lists.length && lists[lists.length - 1].indent > downTo) out.push(`</li></${lists.pop().type}>`);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const item = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    const heading = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
+    const quoteLine = line.match(/^\s*&gt;\s?(.*)$/);
+
+    if (!line.trim()) {
+      flushPara();
+      flushQuote();
+      continue;
+    }
+    if (item) {
+      flushPara();
+      flushQuote();
+      const indent = item[1].replace(/\t/g, '    ').length;
+      const type = /\d/.test(item[2]) ? 'ol' : 'ul';
+      closeLists(indent);
+      const top = lists[lists.length - 1];
+      if (!top || top.indent < indent) {
+        out.push(`<${type}>`);
+        lists.push({ type, indent });
+      } else {
+        out.push('</li>');
+        if (top.type !== type) {
+          out.push(`</${lists.pop().type}><${type}>`);
+          lists.push({ type, indent });
+        }
+      }
+      out.push(`<li>${inlineMd(item[3])}`);
+      continue;
+    }
+    if (lists.length && /^\s+\S/.test(line)) {
+      out.push(` ${inlineMd(line.trim())}`);
+      continue;
+    }
+
+    closeLists();
+    if (heading) {
+      flushPara();
+      flushQuote();
+      const tag = heading[1].length <= 2 ? 'h4' : heading[1].length === 3 ? 'h5' : 'h6';
+      out.push(`<${tag}>${inlineMd(heading[2])}</${tag}>`);
+    } else if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+      flushPara();
+      flushQuote();
+      out.push('<hr>');
+    } else if (TABLE_ROW.test(line) && TABLE_DIVIDER.test(lines[i + 1] ?? '')) {
+      flushPara();
+      flushQuote();
+      const head = tableCells(line);
+      const rows = [];
+      i += 2;
+      while (i < lines.length && TABLE_ROW.test(lines[i])) rows.push(tableCells(lines[i++]));
+      i -= 1;
+      out.push(`<div class="scroll-x"><table class="md-table"><tr>${head.map((c) => `<th>${c}</th>`).join('')}</tr>${
+        rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join('')}</tr>`).join('')}</table></div>`);
+    } else if (quoteLine) {
+      flushPara();
+      quote.push(quoteLine[1]);
+    } else {
+      flushQuote();
+      para.push(line.trim());
+    }
+  }
+  flushPara();
+  flushQuote();
+  closeLists();
+  return out.join('');
+}
+
+// ---------------------------------------------------------------- library
+// Indexing runs in the background on the server: every action below returns
+// quickly, and loadLibrary() polls until the index has caught up.
+$('#rebuild').addEventListener('click', async () => {
+  if (!confirm('Re-embed every document from scratch?\n\nThis is only needed if search results look wrong. ' +
+    'Added and removed documents are indexed automatically.')) return;
+  const btn = $('#rebuild');
+  btn.disabled = true; // loadLibrary() keeps it disabled until the rebuild finishes
+  $('#lib-status').innerHTML = '';
+  try {
+    await api('/api/framework/rebuild', { method: 'POST' });
+    await loadLibrary();
+  } catch (err) {
+    $('#lib-status').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+    btn.disabled = false;
+  }
+});
+
+$('#lib-upload-btn').addEventListener('click', () => $('#lib-file').click());
+$('#lib-file').addEventListener('change', async () => {
+  const files = $('#lib-file').files;
+  if (!files.length) return;
+  const body = new FormData();
+  Array.from(files).forEach((f) => body.append('files', f));
+  $('#lib-status').innerHTML = `<div class="progress"><span class="spinner"></span> Uploading ${files.length} file${files.length === 1 ? '' : 's'}…</div>`;
+  try {
+    const res = await api('/api/framework/upload', { method: 'POST', body });
+    $('#lib-status').innerHTML = [
+      res.saved?.length ? `<div class="notice info">Added ${res.saved.map(esc).join(', ')}. Indexing only ${res.saved.length === 1 ? 'the new file — it becomes' : 'the new files — they become'} searchable when marked <b>Indexed</b> below.</div>` : '',
+      res.errors?.length ? `<div class="notice bad">${res.errors.map(esc).join('<br>')}</div>` : '',
+      res.warnings?.length ? `<div class="notice warn">${res.warnings.map(esc).join('<br>')}</div>` : '',
+    ].join('');
+    await loadLibrary();
+  } catch (err) {
+    $('#lib-status').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+  $('#lib-file').value = '';
+});
+
+let _libPollTimer = null;
+let _libPolling = false;
+// Paths whose DELETE is in flight - a poll redraw must not bring their Remove button back.
+const _removing = new Set();
+
+function indexBadge(d) {
+  if (d.index_state === 'indexed') return `<span class="badge good">Indexed · ${d.chunks} passages</span>`;
+  if (d.index_state === 'error') return `<span class="badge bad" title="${esc(d.error)}">Could not index</span>`;
+  return '<span class="badge warn">Indexing…</span>';
+}
+
+async function loadLibrary() {
+  try {
+    const data = await api('/api/framework');
+    const st = data.status || {};
+    const building = st.state === 'building';
+    const docs = data.documents || [];
+    const pending = docs.filter((d) => d.index_state === 'pending').length;
+    const p = st.progress;
+
+    const stateLabel = { ready: 'Ready', building: 'Updating', empty: 'Empty', not_built: 'Not built', error: 'Error' }[st.state] || st.state || 'Unknown';
+    $('#lib-stats').innerHTML = `
+        <div class="stat">${statIcon()}<div class="k">Index</div>
+          <div class="v">${esc(stateLabel)}</div>
+          <div class="d">${st.built_at ? `updated ${esc(st.built_at)}` : 'not built yet'}</div>
+          <span class="badge ${st.state === 'ready' ? 'good' : st.state === 'error' ? 'bad' : 'warn'}">${esc(stateLabel)}</span></div>
+        <div class="stat">${statIcon()}<div class="k">Documents</div><div class="v">${st.documents ?? 0}</div>
+          <div class="d">${st.chunks ?? 0} searchable passages</div></div>
+        <div class="stat">${statIcon()}<div class="k">Files on disk</div><div class="v">${st.files_on_disk ?? 0}</div>
+          <div class="d">${esc(st.frameworks_dir || '')}</div></div>`;
+
+    const progressText = p && p.total
+      ? ` — checking ${p.done} of ${p.total} files${p.current ? ` (${esc(p.current)})` : ''}`
+      : '';
+    $('#lib-notices').innerHTML = `
+      ${building || pending ? `<div class="notice"><span class="spinner"></span> Updating the index${progressText}. Only new or changed files are embedded; removed files are dropped instantly. Searches keep working on the current index meanwhile.</div>` : ''}
+      ${st.state === 'error' ? `<div class="notice bad"><b>Indexing failed:</b> ${esc(st.message || 'unknown error')}</div>` : ''}
+      ${(st.errors || []).length ? `<div class="notice bad"><b>Could not index:</b><br>${st.errors.map(esc).join('<br>')}</div>` : ''}`;
+
+    clearTimeout(_libPollTimer);
+    // Stop on a failed sync: the error is shown and the user retries explicitly.
+    _libPolling = (building || pending > 0) && st.state !== 'error';
+    if (_libPolling) {
+      _libPollTimer = setTimeout(loadLibrary, 1500);
+    } else {
+      $('#lib-status .notice.info')?.remove(); // keep any upload error notices
+    }
+    $('#rebuild').disabled = building;
+
+    $('#lib-table').innerHTML = docs.length
+      ? `<tr><th>Document</th><th>Size</th><th>Modified</th><th>Search index</th><th></th></tr>` +
+        docs.map((d) => `<tr>
+          <td>${esc(d.path)}</td><td>${d.size_kb} KB</td><td>${esc(d.modified)}</td><td>${indexBadge(d)}</td>
+          <td style="text-align:right">${!isEditor() ? '' : _removing.has(d.path)
+            ? '<button class="btn danger small" disabled>Removing…</button>'
+            : `<button class="btn danger small" data-del="${esc(d.path)}">Remove</button>`}</td>
+        </tr>`).join('')
+      : '<tr><td class="empty">No framework documents yet. Add your policies, standards and templates.</td></tr>';
+
+    $$('#lib-table button[data-del]').forEach((b) => b.addEventListener('click', async () => {
+      const target = b.dataset.del;
+      if (!confirm(`Remove "${target}" from the knowledge base?\n\nThis deletes the file from disk.`)) return;
+      _removing.add(target);
+      b.disabled = true;
+      b.textContent = 'Removing…';
+      try {
+        const res = await fetch(`/api/framework/document?path=${encodeURIComponent(target)}`, { method: 'DELETE' });
+        if (res.status === 401) { toLogin(); return; }
+        // 404 means another tab (or a double click) already removed it - nothing to report.
+        if (!res.ok && res.status !== 404) {
+          let payload = null;
+          try { payload = await res.json(); } catch { /* non-JSON error body */ }
+          throw new Error(payload?.detail || `${res.status} ${res.statusText}`);
+        }
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        _removing.delete(target);
+        await loadLibrary();
+      }
+    }));
+  } catch (err) {
+    // In #lib-notices so the next successful refresh clears it.
+    $('#lib-notices').innerHTML = `<div class="notice bad">Could not refresh the knowledge base: ${esc(err.message)}</div>`;
+    // One failed refresh must not stop tracking an update that is still running.
+    if (_libPolling) {
+      clearTimeout(_libPollTimer);
+      _libPollTimer = setTimeout(loadLibrary, 5000);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- rubrics
+async function loadRubrics() {
+  try {
+    const data = await api('/api/rubrics');
+    const list = data.rubrics || [];
+    $('#rubric').innerHTML = '<option value="auto">Detect automatically</option>' +
+      list.map((r) => `<option value="${esc(r.id)}">${esc(r.name)} (v${esc(r.version)})</option>`).join('');
+    $('#rubric-view').innerHTML = list.map((r) => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join('');
+  } catch { /* surfaced on the System tab */ }
+}
+
+async function loadRubricDetail() {
+  const id = $('#rubric-view').value;
+  if (!id) { $('#rubric-detail').innerHTML = '<div class="empty">No rubrics defined.</div>'; return; }
+  try {
+    const r = await api(`/api/rubrics/${encodeURIComponent(id)}`);
+    $('#rubric-detail').innerHTML = `
+      <div class="status-grid" style="margin:1rem 0">
+        <div class="stat">${statIcon()}<div class="k">Version</div><div class="v">${esc(r.version)}</div></div>
+        <div class="stat">${statIcon()}<div class="k">Dimensions</div><div class="v">${r.dimension_count}</div></div>
+        <div class="stat">${statIcon()}<div class="k">Criteria</div><div class="v">${r.criteria_count}</div></div>
+        <div class="stat">${statIcon()}<div class="k">Structural checks</div><div class="v">${r.section_count + r.check_count}</div></div>
+      </div>
+      <p class="lead">${esc(r.description)}</p>
+      <h3 style="margin-top:1.2rem">Weighting</h3>
+      <div class="bars">${r.dimensions.map((d) => {
+        const total = r.dimensions.reduce((a, x) => a + x.weight, 0) || 1;
+        const pct = (d.weight / total * 100);
+        return `<div class="bar-row">
+          <span>${esc(d.name)} <span class="muted">· ${d.criteria} criteria</span></span>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <span class="n">${pct.toFixed(0)}%</span>
+        </div>`;
+      }).join('')}</div>
+      <h3 style="margin-top:1.4rem">Required sections</h3>
+      <p class="muted">${r.sections.filter((s) => s.required).map((s) => esc(s.title)).join(' · ') || 'none'}</p>
+      <h3 style="margin-top:1.2rem">Criteria</h3>
+      <div class="scroll-x"><table>
+        <tr><th>ID</th><th>Dimension</th><th>Requirement</th><th>Weight</th></tr>
+        ${r.criteria.map((c) => `<tr>
+          <td><code>${esc(c.id)}</code>${c.critical ? ' <span class="badge bad">critical</span>' : ''}</td>
+          <td>${esc(c.dimension)}</td>
+          <td>${esc(c.requirement)}<div class="muted">${(c.framework_refs || []).map((r) => esc(stripMd(r))).join('; ')}</div></td>
+          <td>${c.weight}</td>
+        </tr>`).join('')}
+      </table></div>`;
+  } catch (err) {
+    $('#rubric-detail').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+}
+$('#rubric-view').addEventListener('change', loadRubricDetail);
+
+// ---------------------------------------------------------------- history
+$('#refresh-history').addEventListener('click', loadHistory);
+
+async function loadHistory() {
+  try {
+    const data = await api('/api/evaluations');
+    const rows = data.evaluations || [];
+    $('#history-table').innerHTML = rows.length
+      ? '<tr><th>Document</th><th>Rubric</th><th>Score</th><th>Rating</th><th>Reviewed</th><th></th></tr>' +
+        rows.map((e) => `<tr>
+          <td>${esc(e.filename)}</td>
+          <td>${esc(e.rubric_name)}</td>
+          <td><b>${e.overall_score}</b></td>
+          <td><span class="badge ${e.band === 'Structural check only' ? 'info' : bandClass(e.overall_score)}">${esc(e.band)}</span></td>
+          <td>${esc(e.created_at)}</td>
+          <td style="text-align:right">
+            <button class="btn ghost small" data-open="${esc(e.id)}">Open</button>
+            <a class="btn ghost small" style="text-decoration:none"
+               href="/api/evaluations/${encodeURIComponent(e.id)}/markdown">Memo</a>
+          </td>
+        </tr>`).join('')
+      : '<tr><td class="empty">No reviews yet.</td></tr>';
+
+    $$('#history-table button[data-open]').forEach((b) => b.addEventListener('click', async () => {
+      const full = await api(`/api/evaluations/${encodeURIComponent(b.dataset.open)}`);
+      $$('nav button').forEach((x) => x.classList.remove('active'));
+      $$('.tab').forEach((t) => t.classList.remove('active'));
+      document.querySelector('nav button[data-tab="verify"]').classList.add('active');
+      $('#tab-verify').classList.add('active');
+      renderResult(full);
+    }));
+  } catch (err) {
+    $('#history-table').innerHTML = `<tr><td class="empty">${esc(err.message)}</td></tr>`;
+  }
+}
+
+// ---------------------------------------------------------------- health
+$('#refresh-health').addEventListener('click', loadHealth);
+
+async function loadHealth() {
+  try {
+    const h = await api('/api/health');
+    const llm = h.llm || {};
+    const led = llm.ledger || {};
+    const emb = h.embeddings || {};
+    const fw = h.framework || {};
+    const usedPct = led.budget ? Math.round(led.calls / led.budget * 100) : 0;
+
+    $('#health').innerHTML = `
+      <div class="stat">${statIcon()}<div class="k">Model access</div>
+        <div class="v">${llm.configured ? 'Connected' : 'No API key'}</div>
+        <div class="d">Verify &amp; generate: ${esc(llm.model || '')}<br>Ask: ${esc(llm.qa_model || llm.model || '')}</div>
+        <span class="badge ${llm.configured ? 'good' : 'bad'}">${llm.configured ? 'Connected' : 'No API key'}</span></div>
+      <div class="stat">${statIcon()}<div class="k">Call budget</div>
+        <div class="v">${led.remaining ?? 0} left</div>
+        <div class="d">${led.calls ?? 0} of ${led.budget ?? 0} used (${usedPct}%)</div></div>
+      <div class="stat">${statIcon()}<div class="k">Embeddings</div>
+        <div class="v">${esc(emb.backend || '?')} · ${emb.dim || 0}d</div>
+        <div class="d">${esc(emb.detail || '')}</div>
+        <span class="badge ${emb.backend === 'hash' ? 'warn' : 'good'}">${emb.backend === 'hash' ? 'Fallback' : 'Local'}</span></div>
+      <div class="stat">${statIcon()}<div class="k">Framework index</div>
+        <div class="v">${esc(fw.state || '?')}</div>
+        <div class="d">${fw.documents ?? 0} documents · ${fw.chunks ?? 0} passages</div>
+        <span class="badge ${fw.state === 'ready' ? 'good' : 'warn'}">${fw.state === 'ready' ? 'Ready' : esc(fw.state || 'Unknown')}</span></div>
+      <div class="stat">${statIcon()}<div class="k">Rubrics</div>
+        <div class="v">${(h.rubrics || []).length}</div>
+        <div class="d">${(h.rubrics || []).reduce((a, r) => a + r.criteria_count, 0)} criteria total</div></div>
+      <div class="stat">${statIcon()}<div class="k">Accepted files</div>
+        <div class="v">${(h.supported_types || []).length} types</div>
+        <div class="d">${(h.supported_types || []).join(' ')}</div></div>`;
+
+    if (!llm.configured) {
+      $('#health').insertAdjacentHTML('afterend',
+        `<div class="notice" style="grid-column:1/-1">No <code>NVIDIA_API_KEY</code> is set.
+         Structural checks and search work without it; criterion scoring and Q&amp;A need a key.
+         Copy <code>.env.example</code> to <code>.env</code> and add a free key from build.nvidia.com,
+         then restart the server.</div>`);
+    }
+    if (h.rubric_error) {
+      $('#health').insertAdjacentHTML('afterend',
+        `<div class="notice bad" style="grid-column:1/-1"><b>Rubric problem:</b> ${esc(h.rubric_error)}</div>`);
+    }
+  } catch (err) {
+    $('#health').innerHTML = `<div class="notice bad">${esc(err.message)}</div>`;
+  }
+}
+
+// ---------------------------------------------------------------- session
+let currentUser = null;
+const isEditor = () => currentUser?.role === 'editor';
+
+async function loadSession() {
+  try {
+    currentUser = (await api('/api/auth/me')).user;
+  } catch {
+    return; // api() has already sent the browser to the sign-in page
+  }
+  $('.sidebar-foot').innerHTML = `
+    <div class="who">${esc(currentUser.name || currentUser.email)}</div>
+    <span class="badge ${isEditor() ? 'note' : 'info'} role">${isEditor() ? 'Editor' : 'Viewer'}</span><br>
+    <button type="button" id="sign-out">Sign out</button>`;
+  $('#sign-out').addEventListener('click', async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } finally { location.href = '/login'; }
+  });
+  // Viewers can browse the knowledge base but not change it; the server enforces this regardless.
+  $('#lib-upload-btn').classList.toggle('hidden', !isEditor());
+  $('#rebuild').classList.toggle('hidden', !isEditor());
+}
+
+// ---------------------------------------------------------------- boot
+loadSession();
+initSuggestions();
+loadRubrics().then(loadRubricDetail);
+loadHealth();

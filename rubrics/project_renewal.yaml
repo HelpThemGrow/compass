@@ -1,0 +1,369 @@
+# ---------------------------------------------------------------------------
+# Renewal Proposal
+#
+# Replaces the illustrative starter rubric with Vibha's real Project Proposal
+# Framework, Renewal track, sourced from D:\PM360\ (2026-09-07):
+#   - Copy of Vibha_Leadership_Board_Scoring_Rubric.docx  (the 9 scored
+#     criteria and their High/Medium weights, Renewal track)
+#   - Vibha_Proposal_final.pptx                            (the 15-section
+#     list and 4-phase grouping for the Renewal Track)
+#   - Vibha_Proposal_Process_Map.pdf                       (the shared gate
+#     process, Renewal side)
+#
+# See rubrics/project_proposal.yaml's header for the full explanation of the
+# assumptions made translating the paper rubric into this engine (0-4 anchor
+# authoring, High/Medium -> 3/2 weight mapping, and which criteria are
+# marked critical). The same assumptions apply here.
+# ---------------------------------------------------------------------------
+
+id: project_renewal
+name: Renewal Proposal
+version: "2.0"
+description: >-
+  Vibha's real Renewal track: a request to continue an existing project,
+  prepared by the Programme Team for the Leadership & Board Proposal Review
+  gate. Scored against the 9 Renewal-track criteria on the Leadership &
+  Board Scoring Rubric - weighted towards evidence of delivery against the
+  previous cycle's commitments, not narrative alone. A refreshed Partner Due
+  Diligence & Capacity Assessment must be attached wherever the project runs
+  in partnership mode.
+document_types:
+  - renewal
+  - renewal proposal
+  - continuation
+  - next cycle
+  - phase 2
+  - re-funding
+
+# ---------------------------------------------------------------------------
+# The 15 sections of the Renewal Proposal Template, grouped by the 4 phases
+# shared with the pitch deck ("Orient & Re-justify" / "The Track Record" /
+# "The Forward Plan" / "Make the Ask"). Source: Vibha_Proposal_final.pptx,
+# slide 11.
+# ---------------------------------------------------------------------------
+sections:
+  - id: executive_summary
+    title: Executive Summary
+    aliases: [Renewal Summary, Summary, Overview]
+    required: true
+    min_words: 100
+
+  - id: context
+    title: Context
+    aliases: [Where We Started, Background]
+    required: true
+
+  - id: strategic_fit
+    title: Strategic Fit
+    aliases: [Alignment, Strategic Alignment]
+    required: true
+
+  - id: implementation_mode
+    title: Implementation Mode
+    aliases: [How We're Delivering It, Delivery Mode]
+    required: true
+
+  - id: continued_relevance
+    title: Continued Relevance
+    aliases: [Is It Still Needed, Continued Relevance to Current Need]
+    required: true
+
+  - id: outcomes_and_impact
+    title: Outcomes and Impact
+    aliases: [What We Achieved, Evidence of Outcomes Achieved, Results to Date, Outcome Evidence]
+    required: true
+    min_words: 200
+
+  - id: challenges_and_lessons
+    title: Challenges and Lessons
+    aliases: [What We Learned, Challenges, Lessons Learned, Honest Self-Assessment, Learning and Adaptation]
+    required: true
+    min_words: 100
+
+  - id: meal_evidence
+    title: MEAL Evidence
+    aliases: [Monitoring Evaluation and Learning, Assessment Data, Evidence]
+    required: true
+
+  - id: efficiency
+    title: Efficiency
+    aliases: [Resource Efficiency, Cost Efficiency, Value for Money, Financial Utilisation]
+    required: false
+
+  - id: risk_update
+    title: Risk Update
+    aliases: [Updated Risks, Risk Register Update, Compliance Status]
+    required: true
+
+  - id: proposed_plan_next_cycle
+    title: Proposed Plan for Next Cycle
+    aliases: [What's Next, The Forward Plan, Next Phase Design, Proposed Continuation, Proposed Next Phase, Path to Exit or Institutionalisation]
+    required: true
+    min_words: 150
+
+  - id: budget
+    title: Budget
+    aliases: [Investment, Renewal Budget, Financial Plan]
+    required: true
+
+  - id: team_recommendation
+    title: Team's Own Recommendation
+    aliases: [Recommendation, Our Recommendation, Honest Call]
+    required: true
+
+  - id: decision_requested
+    title: Decision Requested
+    aliases: [The Ask, What We're Asking For, Let's Decide]
+    required: true
+
+  - id: annexures
+    title: Annexures
+    aliases: [Annexes, Appendices, Attachments, Supporting Documents]
+    required: false
+
+# ---------------------------------------------------------------------------
+# Deterministic checks. Renewal-specific: reports that only claim success, or
+# that skip a target-vs-achieved comparison, are exactly what this layer
+# should catch before a human reviewer has to.
+# ---------------------------------------------------------------------------
+checks:
+  - id: RCHK-COMPARISON
+    description: Achieved values are reported against planned targets, not narrative alone
+    type: keyword_any
+    severity: blocker
+    terms: [against target, vs target, versus target, planned vs, achieved, target achieved, variance, "% of target"]
+    remedy: Add a table showing target, achieved and variance for every indicator from the previous cycle.
+
+  - id: RCHK-NUMBERS
+    description: Results are quantified, not just described
+    type: pattern
+    severity: blocker
+    pattern: '\d+\s?%|\d{2,}\s+(children|students|schools|teachers|beneficiaries)'
+    min_count: 3
+    remedy: Replace narrative claims of progress with the actual numbers achieved.
+
+  - id: RCHK-CHALLENGES-NAMED
+    description: Challenges are named honestly, not just adaptations
+    type: keyword_any
+    severity: major
+    terms: [shortfall, did not achieve, below target, missed, under-achieved, fell short, challenge, delay, what did not work]
+    remedy: >-
+      State plainly what did not work and why, not only what was adapted.
+      A renewal that reports only successes is not credible.
+
+  - id: RCHK-PARTNER-DD-REFRESHED
+    description: Where a partner is involved, due diligence is confirmed current, not just complete at the original grant
+    type: keyword_any
+    severity: major
+    terms: [due diligence refreshed, capacity assessment current, DD renewed, periodic refresh, due diligence current]
+    remedy: >-
+      If a partner delivers any part of this, confirm the Partner Due
+      Diligence & Capacity Assessment has been refreshed for this renewal,
+      not left at its original assessment date.
+
+  - id: RCHK-SAFEGUARDING-DECLARATION
+    description: Safeguarding status for the completed period is declared, including an explicit nil return
+    type: keyword_any
+    severity: blocker
+    terms: [no incident, nil return, incident, safeguarding report, complaint, grievance received, POCSO]
+    remedy: >-
+      State explicitly whether any safeguarding incidents or grievances
+      occurred during the grant period, including a nil return if none did.
+      Silence is not a nil return.
+
+  - id: RCHK-RECOMMENDATION
+    description: The team states its own recommendation, not just a request
+    type: keyword_any
+    severity: major
+    terms: [we recommend, our recommendation, honest call, we believe, team's recommendation]
+    remedy: State the team's own recommendation plainly, separate from the request itself.
+
+# ---------------------------------------------------------------------------
+# Scored dimensions - the 9 Renewal-track criteria on the Leadership & Board
+# Scoring Rubric, each its own dimension. weight: High=3, Medium=2.
+# ---------------------------------------------------------------------------
+dimensions:
+  - id: outcomes_vs_sunk_cost
+    name: Evidence of Outcomes and Impact Achieved
+    weight: 3
+    guidance: Judged against what was actually delivered, not the money already spent.
+    criteria:
+      - id: REN-01
+        requirement: >-
+          Reports outcomes and impact actually achieved against the previous
+          cycle's targets, weighed against value delivered - not treated as
+          justified by money already spent.
+        weight: 1
+        critical: true
+        framework_refs: ["Renewal Policy, Section 2 - Performance Reporting", "MEL Framework, Section 4 - Outcome Reporting"]
+        evidence_hints: [target, achieved, variance, outcomes, impact, results to date]
+        anchors:
+          4: A complete target-versus-achieved account for every prior commitment, with outcomes evidenced, not assumed.
+          3: Most indicators reported with variance; outcome evidence has minor gaps.
+          2: Some results reported; others silently dropped or stated without comparison to target.
+          1: Narrative claims of progress with few numbers.
+          0: No comparison to prior targets, or outcomes not reported at all.
+
+  - id: continued_relevance
+    name: Continued Relevance to Current Need / Context
+    weight: 3
+    guidance: Whether the original case for this project still holds.
+    criteria:
+      - id: REN-02
+        requirement: >-
+          Re-establishes that the need this project addresses still exists in
+          the current context, rather than assuming relevance carries over
+          from the original approval.
+        weight: 1
+        framework_refs: ["Programme Design Standards, Section 2 - Evidence of Need"]
+        evidence_hints: [still needed, continued relevance, current context, need still exists]
+        anchors:
+          4: Current need re-evidenced with data, addressing what has changed in the context since original approval.
+          3: Relevance re-asserted with some current evidence.
+          2: Relevance assumed to carry over with minimal re-justification.
+          1: No re-examination of whether the need still exists.
+          0: Not addressed.
+
+  - id: honesty_challenges
+    name: Honesty in Naming Challenges
+    weight: 2
+    guidance: Reward candour about what did not work, not just what was adapted.
+    criteria:
+      - id: REN-03
+        requirement: >-
+          Names challenges and shortfalls directly, not only the adaptations
+          made in response to them.
+        weight: 1
+        framework_refs: ["Renewal Policy, Section 2 - Performance Reporting", "Renewal Policy, Section 3 - Variance Analysis"]
+        evidence_hints: [challenge, shortfall, did not work, honest, what did not go well]
+        anchors:
+          4: Shortfalls named directly and early, with causes analysed, separate from the adaptations made.
+          3: Shortfalls acknowledged alongside adaptations.
+          2: Difficulties mentioned but framed defensively or folded entirely into "lessons".
+          1: Only successes reported despite evident gaps.
+          0: Misleading about performance, or challenges not addressed at all.
+
+  - id: resource_efficiency
+    name: Resource Efficiency
+    weight: 2
+    criteria:
+      - id: REN-04
+        requirement: >-
+          Reports how efficiently resources were used against what was
+          delivered - cost per outcome, utilisation against budget, or an
+          equivalent efficiency measure.
+        weight: 1
+        framework_refs: ["Financial Policy, Section 7 - Utilisation Reporting", "Financial Policy, Section 3 - Value for Money"]
+        evidence_hints: [utilisation, cost per, efficiency, budget vs actual, unit cost]
+        anchors:
+          4: A clear efficiency measure (cost per outcome or utilisation rate) reported and compared to plan or benchmark.
+          3: Utilisation or cost figures reported without a comparison.
+          2: Spend reported with no link to what it delivered.
+          1: Efficiency asserted with no figures.
+          0: Not addressed.
+
+  - id: forward_plan_clarity
+    name: Clarity and Coherence of the Proposed Plan for Next Cycle
+    weight: 3
+    guidance: Whether the next cycle is a considered plan or a straight repeat.
+    criteria:
+      - id: REN-05
+        requirement: >-
+          Sets out what is actually being proposed for the next cycle -
+          what continues, what changes, and why - as a coherent plan rather
+          than an undifferentiated continuation.
+        weight: 1
+        framework_refs: ["Renewal Policy, Section 4 - Forward Design", "Renewal Policy, Section 5 - Next Phase Targets"]
+        evidence_hints: [what's next, forward plan, next cycle, what changes, what continues]
+        anchors:
+          4: A clear, reasoned plan for the next cycle with an explicit delta from the current one.
+          3: A next-cycle plan given; the reasoning for what changes is thin.
+          2: A plan is stated but reads as a straight repeat of the current cycle.
+          1: Vague intentions rather than a plan.
+          0: No forward plan given.
+
+  - id: self_assessment_quality
+    name: Quality and Honesty of the Team's Self-Assessment
+    weight: 3
+    criteria:
+      - id: REN-06
+        requirement: >-
+          Provides the team's own honest assessment of performance and of the
+          case for renewal, distinct from the request itself.
+        weight: 1
+        framework_refs: ["Renewal Policy, Section 3 - Variance Analysis"]
+        evidence_hints: [self-assessment, our recommendation, we recommend, honest call, team's view]
+        anchors:
+          4: A candid self-assessment with the team's own recommendation stated and reasoned, independent of the ask.
+          3: A self-assessment given, but reads as advocacy for the ask rather than an independent judgement.
+          2: A brief, generic self-assessment.
+          1: Self-assessment folded entirely into the request.
+          0: No self-assessment offered.
+
+  - id: resourcing_realism_next_cycle
+    name: Resourcing Realism for Next Cycle
+    weight: 2
+    criteria:
+      - id: REN-07
+        requirement: >-
+          Presents a workable budget and staffing plan for the next cycle,
+          consistent with what was actually deliverable in the current one.
+        weight: 1
+        framework_refs: ["Financial Policy, Section 2 - Budget Format"]
+        evidence_hints: [next phase budget, staffing, resourcing, renewal budget]
+        anchors:
+          4: A real, itemised next-cycle budget and staffing plan, consistent with delivery capacity actually demonstrated.
+          3: A real budget given; consistency with demonstrated delivery capacity is not addressed.
+          2: A budget is present but reads as carried over unchanged with no re-justification.
+          1: A budget figure only, with no plan behind it.
+          0: No budget or resourcing plan for the next cycle.
+
+  - id: partnership_readiness
+    name: Partnership Readiness
+    weight: 3
+    guidance: >-
+      Due diligence and capacity assessment current, if a partner is
+      involved. Not applicable for direct-delivery projects. Marked critical
+      below for the same reason as the New Initiative track - see
+      project_proposal.yaml's header.
+    criteria:
+      - id: REN-08
+        requirement: >-
+          Where a partner is involved, confirms the Partner Due Diligence &
+          Capacity Assessment has been refreshed for this renewal, with any
+          conditions carried forward or newly attached. Not applicable to
+          direct-delivery projects.
+        weight: 1
+        critical: true
+        framework_refs: ["Partner Due Diligence Policy, Section 0 - Application", "Partner Due Diligence Policy, Section 8 - Overall Due Diligence Determination"]
+        evidence_hints: [due diligence refreshed, capacity assessment current, cleared to proceed, periodic refresh]
+        anchors:
+          4: Refreshed due diligence confirmed current, with determination and any conditions stated.
+          3: Refresh in progress with an expected completion date.
+          2: Partner and mode named with no refresh status given.
+          1: Partnership continues with no due diligence process referenced.
+          0: A partnership mode continues with no due diligence referenced at all.
+
+  - id: risk_safeguarding_readiness
+    name: Risk and Safeguarding Readiness
+    weight: 3
+    guidance: >-
+      For a renewal, safeguarding is a factual declaration about what
+      happened during the grant period - a nil return must be stated
+      explicitly; silence is not a nil return.
+    criteria:
+      - id: REN-09
+        requirement: >-
+          Declares whether any safeguarding incident or grievance arose
+          during the period, including an explicit nil return, and provides
+          an updated risk register for the next cycle.
+        weight: 1
+        critical: true
+        framework_refs: ["Safeguarding Policy, Section 5 - Incident Reporting: Timelines and Response", "Risk Management SOP, Section 4 - Risk Review"]
+        evidence_hints: [nil return, incident, safeguarding, updated risk register, grievance]
+        anchors:
+          4: Explicit safeguarding declaration (including nil return if applicable) and an updated risk register for next cycle.
+          3: Declaration given; risk register update is incomplete.
+          2: Safeguarding mentioned without an explicit declaration one way or the other.
+          1: Passing mention only.
+          0: Silent on safeguarding incidents, or no risk update at all.

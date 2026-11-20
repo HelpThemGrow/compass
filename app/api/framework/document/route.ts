@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
+<<<<<<< HEAD
 import { settings } from "@/lib/server/config";
 import * as ingest from "@/lib/server/ingest";
 import { resolveIn, ApiError } from "@/lib/server/uploads";
 import { AuthError, audit, requireUser } from "@/lib/server/auth";
+=======
+import { settings } from "@/lib/config";
+import * as ingest from "@/lib/ingest";
+import { resolveIn, ApiError } from "@/lib/uploads";
+import { AuthError, audit, requireUser } from "@/lib/auth";
+>>>>>>> 32f2f75
 
 /** Deletes the file; its passages are dropped from the index in the background (no re-embedding). */
 export async function DELETE(req: Request) {

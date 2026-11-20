@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import * as generation from "@/lib/server/generation";
 import * as llm from "@/lib/server/llm";
 import * as sensitive from "@/lib/server/sensitive";
@@ -11,6 +12,12 @@ function failureMessage(exc: unknown): string {
   }
   return String((exc as Error)?.message ?? exc);
 }
+=======
+import * as generation from "@/lib/generation";
+import * as llm from "@/lib/llm";
+import * as sensitive from "@/lib/sensitive";
+import { audit, sessionUser } from "@/lib/auth";
+>>>>>>> 32f2f75
 
 export const maxDuration = 300;
 
@@ -26,11 +33,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ detail: sensitive.blockedMessage("The description", findings) }, { status: 400 });
   }
 
+<<<<<<< HEAD
   // ?stream=1: progress events while the draft is written, then the result (same body as below).
   if (new URL(req.url).searchParams.get("stream") === "1") {
     return ndjsonResponse((progress) => generation.generate(docType, description, progress), failureMessage);
   }
 
+=======
+>>>>>>> 32f2f75
   try {
     const result = await generation.generate(docType, description);
     return NextResponse.json(result);
