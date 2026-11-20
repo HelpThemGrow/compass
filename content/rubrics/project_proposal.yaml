@@ -1,0 +1,381 @@
+# ---------------------------------------------------------------------------
+# New Initiative Proposal
+#
+# Replaces the illustrative starter rubric with Vibha's real Project Proposal
+# Framework, sourced from D:\PM360\ (2026-09-07):
+#   - Copy of Vibha_Leadership_Board_Scoring_Rubric.docx  (the 8 scored criteria
+#     and their High/Medium weights, New track)
+#   - Vibha_Proposal_final.pptx                            (the 15-section list
+#     and 4-phase grouping for the New Initiative Track)
+#   - Vibha_New_Initiative_Pitch_Deck.pptx                 (per-section "have
+#     ready" cues, used for a few of the deterministic checks below)
+#   - Vibha_Proposal_Process_Map.pdf                       (the gate process:
+#     Complete Proposal -> Build Pitch -> Present & Decide -> Score & Log ->
+#     Gate Decision)
+#
+# ASSUMPTIONS made translating the paper rubric into this engine (flagged
+# per the org's "separate facts from assumptions" principle, not established
+# by the source documents themselves):
+#   - The source sheet scores 1-5 with no descriptive anchors, just a blank
+#     box per criterion. This engine scores 0-4 with a written anchor per
+#     band. The anchor language below (what a 4 vs a 2 vs a 0 looks like) is
+#     authored to fit the engine, not copied from a Vibha document - it
+#     doesn't exist in the source. Programme/Compliance staff should review
+#     and adjust the anchor wording so it matches how the Board actually
+#     reasons about each criterion.
+#   - "High" / "Medium" weight labels are mapped to numeric weights 3 / 2.
+#   - "Risk & safeguarding readiness" and "Partnership readiness" are marked
+#     critical: true (a 0-1 score caps the overall rating) because they are
+#     the two criteria on this sheet that read as gating conditions rather
+#     than quality trade-offs - consistent with this app's own stated
+#     convention of using `critical` sparingly, for safeguarding and legal
+#     standing. The source rubric itself does not label any criterion
+#     "critical"; every criterion there is scored the same way.
+#   - The deterministic checks (below) are new - the paper tool has no
+#     equivalent - built from the Pitch Deck's per-slide "Have Ready" column
+#     to catch a few of the same completeness gaps before a human reviewer
+#     has to.
+# ---------------------------------------------------------------------------
+
+id: project_proposal
+name: New Initiative Proposal
+version: "2.0"
+description: >-
+  Vibha's real New Initiative track: a first-time project proposal prepared
+  by the Programme Team for the Leadership & Board Proposal Review gate.
+  Scored against the 8 New-track criteria on the Leadership & Board Scoring
+  Rubric. A Partner Due Diligence & Capacity Assessment must be attached
+  wherever the proposal involves a partnership implementation mode.
+document_types:
+  - new initiative
+  - new initiative proposal
+  - new project proposal
+  - new proposal
+  - pitch deck
+  - proposal review gate
+
+# ---------------------------------------------------------------------------
+# The 15 sections of the New Project Proposal Template, grouped by the 4
+# phases the pitch deck and template share ("Orient" / "Build the Case" /
+# "Prove It's Fundable" / "Make the Ask"). Source: Vibha_Proposal_final.pptx,
+# slide 7.
+# ---------------------------------------------------------------------------
+sections:
+  - id: executive_summary
+    title: Executive Summary
+    aliases: [Summary, Overview, Project Summary]
+    required: true
+    min_words: 100
+
+  - id: strategic_fit
+    title: Strategic Fit
+    aliases: [Strategic Alignment, Alignment with Strategy, Where This Fits, Alignment]
+    required: true
+
+  - id: implementation_mode
+    title: Implementation Mode
+    aliases: [How We'll Deliver It, Delivery Mode, Direct or Partnership, Team and Capacity, Partner Profile, Organisational Capacity]
+    required: true
+
+  - id: context
+    title: Context
+    aliases: [Background, The Situation, What We're Responding To]
+    required: true
+
+  - id: situation_and_needs
+    title: Situation and Needs
+    aliases: [The Situation, The Opportunity, Needs Analysis, Problem Statement]
+    required: true
+    min_words: 150
+
+  - id: theory_of_change
+    title: Theory of Change
+    aliases: [ToC, How It Works, Programme Logic]
+    required: true
+
+  - id: design
+    title: Design
+    aliases: [Our Approach, Project Design, Programme Design]
+    required: true
+    min_words: 150
+
+  - id: stakeholder_fit
+    title: Stakeholder Fit
+    aliases: [Delivery, How We'll Deliver It, Stakeholders]
+    required: true
+
+  - id: feasibility
+    title: Feasibility
+    aliases: [Proof of Feasibility, Why We Believe This Will Work, Pilot Design]
+    required: true
+
+  - id: meal_plan
+    title: MEAL Plan
+    aliases: [Success, Outcomes and Impact, Monitoring Evaluation and Learning, MEL Plan, Results Framework, Monitoring and Evaluation, M&E Plan, Logframe]
+    required: true
+
+  - id: budget
+    title: Budget
+    aliases: [Investment, What It Will Cost, Financial Plan]
+    required: true
+
+  - id: risk_and_safeguarding
+    title: Risk and Safeguarding
+    aliases: [Risk, Risks We're Watching, Risk Management, Safeguarding]
+    required: true
+
+  - id: scale_exit_criteria
+    title: Scale / Exit Criteria
+    aliases: [Scale-Up, Exit Criteria, Sustainability, Government Engagement, Institutionalisation]
+    required: false
+
+  - id: decision_requested
+    title: Decision Requested
+    aliases: [The Ask, What We're Asking For, Let's Decide]
+    required: true
+
+  - id: annexures
+    title: Annexures
+    aliases: [Annexes, Appendices, Attachments, Supporting Documents]
+    required: false
+
+# ---------------------------------------------------------------------------
+# Deterministic checks - new, not in the source documents. Built from the
+# Pitch Deck's per-slide "Have Ready" cues (Vibha_New_Initiative_Pitch_Deck.pptx,
+# slide 1) to catch the same completeness gaps at zero model cost.
+# ---------------------------------------------------------------------------
+checks:
+  - id: CHK-EVIDENCE-SOURCE
+    description: A named evidence source backs the situation analysis, not just conversations
+    type: keyword_any
+    severity: major
+    terms: [ASER, UDISE, NAS, National Achievement Survey, baseline, survey, assessment, field data, needs assessment]
+    remedy: >-
+      Name the evidence source behind "The Situation" and "The Evidence" -
+      an assessment, survey or field-data source - not "conversations" or
+      "our experience" alone. (Pitch Deck, "The Evidence" slide.)
+
+  - id: CHK-BUDGET-TOTAL
+    description: A budget total or line-item figure is stated
+    type: pattern
+    severity: blocker
+    pattern: '(INR|Rs\.?|₹)\s?[\d,]+|\d+\s?(lakh|crore)'
+    min_count: 1
+    remedy: State an actual budget total, not a placeholder amount. (Pitch Deck, "Investment" slide.)
+
+  - id: CHK-PILOT-THRESHOLD
+    description: A specific scale-up / hold / stop threshold is given, not just "if it goes well"
+    type: keyword_any
+    severity: major
+    terms: [scale up, scale-up, threshold, trigger, if we see, hold or stop, evidence that would tell us]
+    remedy: >-
+      State the specific, measurable evidence that would trigger scaling this up,
+      holding, or stopping - a number or threshold, not "if it goes well".
+      (Pitch Deck, "Feasibility" slide.)
+
+  - id: CHK-PARTNER-READINESS
+    description: Where a partner is involved, due diligence / capacity status is named
+    type: keyword_any
+    severity: major
+    terms: [due diligence, capacity assessment, partner named, DD complete, DD underway, partner readiness]
+    remedy: >-
+      If a partner delivers any part of this, name them and state whether the
+      Partner Due Diligence & Capacity Assessment is complete or underway.
+      (Pitch Deck, "Delivery" slide; Process Map, "If a Partner is Involved".)
+
+  - id: CHK-SAFEGUARDING-CHECKPOINT
+    description: A safeguarding checkpoint is named wherever children or vulnerable groups are involved
+    type: keyword_any
+    severity: blocker
+    terms: [safeguarding, child protection, safeguarding checkpoint, POCSO, code of conduct]
+    remedy: >-
+      Name the safeguarding checkpoint for any activity with direct contact with
+      children or vulnerable groups. (Pitch Deck, "Risk" slide.)
+
+  - id: CHK-SPECIFIC-ASK
+    description: The ask is specific - approval, budget sign-off, or a named enabling decision
+    type: keyword_any
+    severity: major
+    terms: [approval to proceed, budget sign-off, requesting approval, we are asking, decision requested]
+    remedy: State the specific ask - approval to proceed, a budget sign-off amount, or a named enabling decision.
+
+# ---------------------------------------------------------------------------
+# Scored dimensions - the 8 New-track criteria on the Leadership & Board
+# Scoring Rubric, each its own dimension (the source scores them
+# independently; it does not group them). weight: High=3, Medium=2. See the
+# file header for how the 0-4 anchors were derived.
+# ---------------------------------------------------------------------------
+dimensions:
+  - id: strategic_fit
+    name: Strategic Fit with Educate / Empower / Enable
+    weight: 3
+    guidance: >-
+      Vibha's philosophy is Educate, Empower, Enable. A proposal should sit
+      inside that philosophy and a named portfolio, not be argued into it.
+    criteria:
+      - id: NEW-01
+        requirement: >-
+          Shows the project's fit with Vibha's Educate / Empower / Enable
+          philosophy and its current strategic direction, vision and mission.
+        weight: 1
+        framework_refs: ["Strategy Note, Section 1 - Mission and Scope", "Strategy Note, Section 2 - Portfolio Structure"]
+        evidence_hints: [educate, empower, enable, strategic direction, vision, mission, portfolio]
+        anchors:
+          4: Explicit, argued fit to the philosophy, a named portfolio, and current strategic direction.
+          3: Fit to the philosophy and portfolio stated, direction link asserted rather than argued.
+          2: A general claim of alignment with no portfolio or direction named.
+          1: Alignment asserted in one line with no reasoning.
+          0: No stated connection to Vibha's mission, vision or philosophy.
+
+  - id: needs_evidence
+    name: Needs Evidence
+    weight: 3
+    guidance: >-
+      Quality of the situation analysis - who is affected, where, and how the
+      team knows.
+    criteria:
+      - id: NEW-02
+        requirement: >-
+          States who is affected, where, and cites the named evidence source
+          behind that claim - not a general impression of need.
+        weight: 1
+        critical: false
+        framework_refs: ["Programme Design Standards, Section 2 - Evidence of Need"]
+        evidence_hints: [who is affected, evidence shows, named source, baseline, survey, ASER, UDISE]
+        anchors:
+          4: Beneficiary group, scale and geography stated, with a named, dated evidence source and figures.
+          3: Evidence source named but missing a figure, geography, or date.
+          2: A general description of need with no named source.
+          1: Need asserted with no evidence offered.
+          0: No situation analysis presented.
+
+  - id: programme_logic
+    name: Programme Logic
+    weight: 3
+    guidance: Causal coherence of the Theory of Change - not just a chain of boxes.
+    criteria:
+      - id: NEW-03
+        requirement: >-
+          Presents a Theory of Change - from resources and effort through to
+          the change delivered and the bigger difference it adds up to - with
+          the logic between each step made explicit.
+        weight: 1
+        framework_refs: ["Programme Design Standards, Section 3.1 - Theory of Change", "Programme Design Standards, Section 3.2 - Assumptions"]
+        evidence_hints: [theory of change, inputs, activities, outputs, outcomes, impact, logic, causal]
+        anchors:
+          4: A complete input-to-impact chain with the reasoning between each step argued, key assumptions named.
+          3: A complete chain, but the logic between steps is asserted rather than argued.
+          2: Some steps present, others missing or conflated.
+          1: An activity list labelled as a Theory of Change.
+          0: No programme logic presented.
+
+  - id: feasibility
+    name: Feasibility and Pilot Design Realism
+    weight: 2
+    guidance: >-
+      Starting small on purpose - the pilot's scope, and the specific
+      evidence that would trigger scale-up, hold, or stop.
+    criteria:
+      - id: NEW-04
+        requirement: >-
+          States the pilot's scope and duration, and the specific, measurable
+          evidence that would trigger a decision to scale up, hold, or stop.
+        weight: 1
+        framework_refs: ["Programme Design Standards, Section 3 - Programme Logic and Design"]
+        evidence_hints: [pilot scope, starting small, scale up, hold, stop, threshold, duration]
+        anchors:
+          4: Pilot scope and duration stated, with a specific, measurable scale/hold/stop threshold.
+          3: Pilot scope stated; the scale-up threshold is directional rather than measurable.
+          2: A pilot is mentioned without a defined scope or threshold.
+          1: We'll see how it goes, with no defined test.
+          0: No pilot or feasibility test described.
+
+  - id: differentiation
+    name: Differentiation / Innovation Value
+    weight: 2
+    guidance: What is genuinely new here, and why Vibha specifically.
+    criteria:
+      - id: NEW-05
+        requirement: >-
+          Explains what is different or new about this approach compared with
+          Vibha's existing work and other provision, and why Vibha is
+          uniquely placed to do it.
+        weight: 1
+        framework_refs: ["Strategy Note, Section 3 - Scaling Proven Solutions"]
+        evidence_hints: [different, new approach, differentiation, uniquely placed, innovation, existing provision]
+        anchors:
+          4: A clear, argued point of difference from existing provision, with why Vibha is well placed to deliver it.
+          3: A point of difference is named without the "why Vibha" argument.
+          2: Framed as more of the same, with a thin differentiation claim.
+          1: Novelty asserted with no comparison to what already exists.
+          0: Not addressed.
+
+  - id: resourcing_realism
+    name: Resourcing Realism
+    weight: 2
+    guidance: Whether the budget, staffing and timeline given are actually workable.
+    criteria:
+      - id: NEW-06
+        requirement: >-
+          Presents a workable budget and staffing plan for the proposed scope
+          and timeline, with a real total, not a placeholder figure.
+        weight: 1
+        framework_refs: ["Financial Policy, Section 2 - Budget Format", "Financial Policy, Section 3 - Value for Money"]
+        evidence_hints: [budget total, line item, staffing, cost per, timeline, resourcing]
+        anchors:
+          4: A real, itemised budget and staffing plan that is plausible for the stated scope and timeline.
+          3: A real budget total given; staffing or itemisation is thin.
+          2: A budget is present but reads as a placeholder or round-number estimate.
+          1: A budget figure is mentioned with no detail behind it.
+          0: No budget or resourcing plan given.
+
+  - id: partnership_readiness
+    name: Partnership Readiness
+    weight: 3
+    guidance: >-
+      Due diligence and capacity assessment complete, if a partner is
+      involved. Not applicable for direct-delivery proposals. Marked
+      critical below because, where a partnership is proposed, incomplete
+      due diligence is a gating condition, not a quality trade-off - see the
+      file header for why this departs from the source sheet, which does not
+      mark any criterion critical.
+    criteria:
+      - id: NEW-07
+        requirement: >-
+          Where a partner is involved, names the partner and confirms the
+          Partner Due Diligence & Capacity Assessment is complete, with any
+          conditions attached. Not applicable to direct-delivery proposals.
+        weight: 1
+        critical: true
+        framework_refs: ["Partner Due Diligence Policy, Section 1 - Organisational Identity and Registration", "Partner Due Diligence Policy, Section 8 - Overall Due Diligence Determination"]
+        evidence_hints: [partner named, due diligence, capacity assessment, cleared to proceed, cleared with conditions]
+        anchors:
+          4: Partner named, due diligence assessment complete, determination and any conditions stated.
+          3: Partner named, due diligence underway with an expected completion date.
+          2: Partner named with no due diligence status given.
+          1: Partnership implied without naming the partner.
+          0: A partnership mode is proposed with no due diligence process referenced at all.
+
+  - id: risk_safeguarding_readiness
+    name: Risk and Safeguarding Readiness
+    weight: 3
+    guidance: >-
+      Safeguarding is a threshold, not a scored trade-off - the same
+      principle as the rest of this framework's risk and safeguarding
+      criteria.
+    criteria:
+      - id: NEW-08
+        requirement: >-
+          Names the top risks (not the full register) with how each will be
+          managed, and names the safeguarding checkpoint for any activity
+          involving direct contact with children or vulnerable groups.
+        weight: 1
+        critical: true
+        framework_refs: ["Safeguarding Policy, Section 1 - Partner Requirements and Ongoing Compliance", "Risk Management SOP, Section 2 - Risk Register"]
+        evidence_hints: [risk, mitigation, safeguarding checkpoint, child protection, code of conduct]
+        anchors:
+          4: Top risks named with mitigations, and a specific safeguarding checkpoint named where children are involved.
+          3: Top risks and mitigations named; safeguarding checkpoint referenced generically.
+          2: Risks named without mitigations, or safeguarding mentioned without a checkpoint.
+          1: A generic risk statement with no safeguarding reference.
+          0: No risks named, or safeguarding not addressed despite direct contact with children.

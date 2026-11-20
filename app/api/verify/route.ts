@@ -1,0 +1,84 @@
+import { NextResponse } from "next/server";
+import fs from "node:fs";
+import { settings } from "@/lib/server/config";
+import { extract } from "@/lib/server/extract";
+import * as rubric from "@/lib/server/rubric";
+import * as evaluator from "@/lib/server/evaluate";
+import * as llm from "@/lib/server/llm";
+import * as sensitive from "@/lib/server/sensitive";
+import { audit, sessionUser } from "@/lib/server/auth";
+import { saveUpload, ApiError } from "@/lib/server/uploads";
+import { ndjsonResponse } from "@/lib/server/stream";
+
+export const maxDuration = 300;
+
+export async function POST(req: Request) {
+  const form = await req.formData();
+  const file = form.get("file");
+  if (!(file instanceof File)) return NextResponse.json({ detail: "A file is required." }, { status: 400 });
+  const rubricId = String(form.get("rubric_id") ?? "auto");
+  const skipLlm = String(form.get("skip_llm") ?? "false") === "true";
+  const evidencePerCriterion = parseInt(String(form.get("evidence_per_criterion") ?? "3"), 10) || 3;
+
+  let p: string | null = null;
+  try {
+    p = await saveUpload(file, settings.uploadsDir);
+    const doc = await extract(p);
+    if (!doc.text.trim()) {
+      return NextResponse.json({ detail: "No text could be read from this file. If it is a scanned PDF, run OCR first." }, { status: 400 });
+    }
+    // Screened before any part of the document reaches the model.
+    const findings = sensitive.scanText(doc.text);
+    if (sensitive.blocking(findings).length) {
+      audit(sessionUser(req.headers.get("cookie"))?.email ?? null, "sensitive_blocked", { where: "verify", found: findings.map((f) => f.kind) });
+      return NextResponse.json({ detail: sensitive.blockedMessage("This document", findings) }, { status: 400 });
+    }
+    if (findings.length) doc.warnings.push(sensitive.warningMessage("This document", findings));
+
+    const suggestions = rubric.suggest(doc.text);
+    let chosen = rubricId;
+    if (rubricId === "" || rubricId === "auto") {
+      if (!suggestions.length) return NextResponse.json({ detail: "No rubrics are defined. Add a YAML file under rubrics/." }, { status: 400 });
+      chosen = suggestions[0].id;
+    }
+
+    let selected;
+    try {
+      selected = rubric.get(chosen);
+    } catch (exc) {
+      return NextResponse.json({ detail: (exc as Error).message }, { status: 400 });
+    }
+
+    const options = {
+      filename: file.name || "upload",
+      evidencePerCriterion: Math.max(1, Math.min(6, evidencePerCriterion)),
+      skipLlm,
+      rubricSuggestions: suggestions,
+      autoSelected: rubricId === "" || rubricId === "auto",
+    };
+
+    // ?stream=1: progress events while the review runs, then the result (same body as below).
+    if (new URL(req.url).searchParams.get("stream") === "1") {
+      return ndjsonResponse(
+        (progress) => evaluator.evaluate(doc, selected, { ...options, onProgress: progress }),
+        (exc) => String((exc as Error)?.message ?? exc)
+      );
+    }
+
+    try {
+      const result = await evaluator.evaluate(doc, selected, options);
+      return NextResponse.json(result);
+    } catch (exc) {
+      if (exc instanceof llm.BudgetExhausted) return NextResponse.json({ detail: exc.message }, { status: 429 });
+      if (exc instanceof llm.LLMUnavailable || exc instanceof llm.AccessDenied) {
+        return NextResponse.json({ detail: exc.message }, { status: 503 });
+      }
+      throw exc;
+    }
+  } catch (exc) {
+    if (exc instanceof ApiError) return NextResponse.json({ detail: exc.message }, { status: exc.status });
+    return NextResponse.json({ detail: (exc as Error).message }, { status: 500 });
+  } finally {
+    if (p) fs.unlink(p, () => {});
+  }
+}

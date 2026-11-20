@@ -1,0 +1,368 @@
+# Compass
+
+_Guiding teams through frameworks, compliance, and document standards._
+
+Checks programme documents — funding proposals, renewal requests, concept notes —
+against the organisation's written framework, and answers questions about that
+framework.
+
+A team member uploads a document. They get back a rating out of 100, what is
+missing, what needs improving, and a downloadable review memo. Every finding is
+tied to a numbered criterion and a quoted passage, so a programme manager can
+contest a specific line and a board can see why a score is what it is.
+
+This is the **Next.js / TypeScript port** of the original Python (FastAPI)
+Compass app. It is a feature-for-feature replica — same three-layer
+architecture, same rubrics and framework documents, same NVIDIA hosted model —
+rebuilt on Node so the whole stack is JavaScript/TypeScript, no Python runtime
+required.
+
+---
+
+## Architecture
+
+Three layers, same as the original, ported 1:1:
+
+### Layer 0 — Deterministic checks (no model)
+
+Required sections present, budget tables that add up, unfilled `TBD` /
+`[insert name]` placeholders, registration numbers, safeguarding declarations.
+Pure parsing (`lib/server/deterministic.ts`) — instant, free, identical every run.
+
+### Layer 1 — Rubric evaluation with inverted retrieval
+
+The framework is compiled into a **rubric**: versioned, weighted criteria with
+explicit 0–4 scoring anchors, stored as plain YAML (`content/rubrics/*.yaml`).
+Retrieval runs backwards compared to a chatbot: the corpus is the *submitted
+document*, each query is a *framework criterion*. Every score is anchored to a
+verbatim quote or explicitly marked as having no evidence
+(`lib/server/evaluate.ts`).
+
+### Layer 2 — Ask the framework (RAG with whole-document context)
+
+Hybrid retrieval (dense + BM25, fused by Reciprocal Rank Fusion) over the
+knowledge base, with a prompt that refuses to answer from general knowledge
+(`lib/server/qa.ts`, `lib/server/store.ts`).
+
+Retrieved passages vote for the documents they belong to, and the top
+documents are given to the model **whole** — every section, with headings —
+plus the strongest extra passages from other documents. Passage-level top-k
+alone fragments a policy: "What must a partner provide for due diligence?"
+matches the Due Diligence Policy's title and conclusion but not the seven
+numbered sections that actually hold the requirements. The whole knowledge
+base is ~30K tokens, so whole documents fit comfortably.
+
+Answers are Markdown (headings, bullets, tables, `[n]` citations), rendered
+safely in the chat and streamed as the model writes them.
+
+### Layer 3 — Generate a document from a description
+
+The inverse of verification: describe a project in a few sentences and get a
+first draft of a Project Charter, Project Proposal, or Concept Note, written
+section by section against the same framework (`lib/server/generation.ts`). Project
+Charter and Project Proposal fill the organisation's real `.docx` templates
+directly via a hand-rolled OOXML engine (`lib/server/docxEngine.ts`); Concept Note
+renders to a generic `.docx` built from scratch.
+
+---
+
+## Node/TypeScript equivalents of the Python stack
+
+| Job | Python original | This port |
+|---|---|---|
+| Server | FastAPI | Next.js 15 App Router (Route Handlers) |
+| LLM client | `openai` (Python SDK) | `openai` (Node SDK), same NVIDIA endpoint/model |
+| Local embeddings | `fastembed` (ONNX) | `@xenova/transformers` (ONNX), `Xenova/bge-small-en-v1.5` |
+| Vector math | NumPy | plain `Float32Array` |
+| PDF extraction | `pypdf` | `pdf-parse` |
+| Excel extraction | `openpyxl` | `xlsx` (SheetJS) |
+| CSV parsing | `csv` stdlib | hand-written RFC-4180-ish parser |
+| YAML | `PyYAML` | `js-yaml` |
+| `.docx` template filling | `python-docx` + custom OOXML walking | `jszip` (unzip/rezip) + `@xmldom/xmldom` (DOM traversal) |
+| Generic `.docx` generation | `python-docx` | `docx` (npm) |
+
+Embeddings, reranking and lexical search all still run locally on the CPU —
+indexing the framework library costs zero API calls, same as the original.
+The hosted NVIDIA model is used only for judging criteria, writing feedback,
+Q&A, and drafting generated documents.
+
+`NVIDIA_API_KEY`, `NVIDIA_MODEL`, `NVIDIA_RPM_LIMIT`, `CREDIT_BUDGET`, and
+every other setting use the exact same variable names as the Python app's
+`.env`, so a working key/config drops straight into `.env.local`.
+
+### Which NVIDIA models, and why
+
+All models are on NVIDIA's free hosted endpoint (build.nvidia.com).
+
+| Task | Model | Fallback |
+|---|---|---|
+| Verify / Generate (`NVIDIA_MODEL`) | `nvidia/nemotron-3-super-120b-a12b` — fast | `nvidia/nemotron-3-ultra-550b-a55b` |
+| Ask the framework (`NVIDIA_QA_MODEL`) | `nvidia/nemotron-3-ultra-550b-a55b` — best answers | `nvidia/nemotron-3-super-120b-a12b` |
+
+Chosen on 2026-09-28 by testing every plausible catalogue model with this
+app's real prompts. Many listed models returned 404 or did not respond within
+a minute on the free tier. Of the two Nemotron 3 models that did, blind
+judging of 8 real staff questions against the source policies scored the 550B
+model clearly higher on completeness and structure. The 120B model is faster
+but returned "503 overloaded" on roughly a third of calls, so each model backs
+the other up. Verify and Generate stay on the faster model because they make
+many calls per task. Model availability changes often: re-check before
+changing these values.
+
+---
+
+## Setup
+
+```bash
+npm install
+cp .env.local.example .env.local
+```
+
+Open `.env.local` and paste a free API key from https://build.nvidia.com:
+
+```
+NVIDIA_API_KEY=nvapi-your-key-here
+```
+
+Add a session secret (it signs the sign-in cookies; changing it signs
+everyone out):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+```
+COMPASS_SESSION_SECRET=the-64-characters-printed-above
+```
+
+Create the first account. The password is generated and printed once —
+pass it on privately:
+
+```bash
+npm run users -- add you@vibha.org editor "Your Name"
+```
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000 and sign in. Without a key the app still runs — structural
+checks, search and the framework library all work; only criterion scoring,
+Q&A and generation need it.
+
+First embedding call downloads the local model weights (cached under
+`data/.transformers-cache/`), then works offline.
+
+**Production build:**
+
+```bash
+npm run build
+npm run start
+```
+
+---
+
+## Using it
+
+**Verify a document** — drop in a PDF, Word file, Markdown, text, Excel or
+CSV. The rubric is detected automatically; override it if the detection is
+wrong. "Structural checks only" runs the whole thing with no API calls.
+
+**Generate a document** — describe a project in a few sentences and get a
+first draft of a Project Charter, Project Proposal, or Concept Note.
+
+**Ask the framework** — questions about policy, with citations back to the
+source document and section.
+
+**Knowledge base** — add or remove framework documents and rebuild the
+index (editors only). No restart needed.
+
+**Rubrics** — see exactly what is being scored, with weights and criteria.
+
+**History** — past reviews, re-openable, each with a downloadable memo.
+
+**System** — model access, call budget, embedding backend, framework index
+status.
+
+---
+
+## Adapting it to your framework
+
+Two directories hold everything organisation-specific — neither requires
+code changes.
+
+### `content/frameworks/` — the source documents
+
+Drop in policies, design standards, SOPs and blank templates
+(`.pdf`, `.docx`, `.md`, `.txt`, `.xlsx`, `.csv`; sub-folders fine). This is
+what Q&A answers from and what rubric criteria cite.
+
+### `content/rubrics/*.yaml` — the scoreable framework
+
+Each file is one document type — see `content/rubrics/project_proposal.yaml`,
+`project_renewal.yaml`, `concept_note.yaml` for the shape: `sections`
+(structural), `checks` (deterministic), `dimensions` → `criteria` (scored,
+with weights, anchors and `framework_refs`). Rubrics reload on save; add a
+new file and it appears in the dropdown.
+
+### Adding a generated document type with its own template
+
+Drop the `.docx` in `content/doc_templates/`, write a `content/generation/<type>.yaml`
+describing its sections and tables (see `content/generation/project_charter.yaml`
+for the full shape), and it appears in the document-type list automatically.
+
+---
+
+## Sign-in and roles
+
+Every page and API call needs a signed-in account.
+
+| Role | Can |
+|---|---|
+| `viewer` | Ask, Verify, Generate, and read everything (knowledge base list, rubrics, history, System) |
+| `editor` | Everything a viewer can, plus add, remove and rebuild knowledge base documents |
+
+Accounts live in `data/users.json` (scrypt password hashes, never plain
+text) and are managed from the command line on the server:
+
+```bash
+npm run users -- list
+npm run users -- add <email> <viewer|editor> [display name]
+npm run users -- role <email> <viewer|editor>
+npm run users -- reset <email>
+npm run users -- disable <email>
+npm run users -- enable <email>
+npm run users -- remove <email>
+```
+
+`role`, `reset`, `disable` and `remove` end that person's existing
+sign-ins immediately. Sessions last 12 hours. Five wrong passwords from one
+address (or twenty in total) lock the account for 15 minutes.
+
+`data/audit.log` records sign-ins, failed sign-ins, lockouts, account
+changes, knowledge base uploads, deletions and rebuilds, and blocked
+sensitive data — who and when, never passwords or the matched values.
+
+When serving to other machines, put it behind HTTPS so the cookie is marked
+`Secure`.
+
+---
+
+## Privacy
+
+Everything runs locally except the judging, Q&A and generation calls to
+NVIDIA. Uploaded documents are deleted from disk immediately after
+processing; only the resulting JSON report is kept, in `data/reports/`.
+
+**Document text, questions, and anything typed into the Generate tab are
+sent to NVIDIA's hosted API.** Under NVIDIA's free developer tier that is
+not a private endpoint.
+
+- Do not upload documents, or describe projects, containing child-level
+  personal data, identifiable photographs, health or disability records, or
+  guardian contact details.
+- Do not upload donor databases, HR records, government IDs, or credentials.
+- Use anonymised or aggregated data wherever the document allows it.
+
+### Sensitive-data check
+
+As a safety net, `lib/server/sensitive.ts` screens text **on this server, before
+anything is sent to NVIDIA** — plain pattern checks, so the check itself
+sends nothing anywhere. It runs on knowledge base uploads (and on files
+copied straight into `content/frameworks/`, which are left out of the index),
+Verify uploads, Ask questions (including earlier turns of the
+conversation), and Generate descriptions.
+
+| Found | Result |
+|---|---|
+| Aadhaar numbers (checksum-validated) | Blocked |
+| Payment card numbers (Luhn-validated) | Blocked |
+| Passwords, API keys, private keys | Blocked |
+| Personal PAN numbers | Blocked |
+| Tables of personal records — a name column plus two or more of date of birth, age, class, gender, roll/admission number, parent/guardian, contact details, caste/religion/health, Aadhaar — with five or more filled rows | Blocked |
+| Three or more mobile numbers, ten or more email addresses, bank IFSC codes | Allowed, with a warning |
+
+Blocked actions are recorded in `data/audit.log` with the kind of data
+found, never the values. Messages tell the user what kind of data was
+found and to remove or anonymise it.
+
+**It is a safety net, not a guarantee.** It cannot recognise a child's
+name on its own, a photograph, a table inside a PDF (PDF text loses its
+column layout — records tables are recognised in Word, Excel, CSV,
+Markdown and tab-separated text), or data it has no pattern for. Staff remain responsible for following the rules
+above. If the rules change, bump `SCREEN_VERSION` in `lib/server/sensitive.ts` so
+knowledge base files indexed earlier are screened again.
+
+`.env.local` is gitignored. It holds your API key and session secret — do
+not commit it.
+
+---
+
+## Project layout
+
+```
+app/                         routes only
+  layout.tsx, page.tsx       root layout (providers) and the single-page entry
+  login/                     sign-in page
+  api/                       Route Handlers - one per endpoint
+  globals.css                design tokens (light/dark) and base styles
+components/
+  ui/                        shadcn-style primitives (button, card, table, ...)
+  common/                    shared presentational pieces (PageHeader, StatCard, StatusBadge, ...)
+  providers/                 theme provider and app context
+  shell/                     sidebar, topbar, command palette, nav config, app shell
+  tabs/                      one component per page: verify, generate, ask, library, rubrics, history, system
+lib/
+  client/                    browser-side: api() helper + types, markdown renderer
+  server/                    server-only logic
+    config.ts                settings, all env-overridable
+    auth.ts                  accounts, password checks, signed session cookies, audit log
+    llm.ts                   NVIDIA client: rate limiting, credit ledger
+    embeddings.ts            pluggable embedders (local ONNX / NVIDIA / hash) + reranker
+    extract.ts               pdf, docx, xlsx, csv, md, txt -> text + heading outline
+    chunking.ts, store.ts    structure-aware chunking; vector store + BM25 fused by RRF
+    ingest.ts                framework library indexing
+    rubric.ts                rubric model, YAML loader, auto-detection
+    deterministic.ts         layer 0 - checks that need no model
+    evaluate.ts              layer 1 - inverted retrieval + rubric judging
+    qa.ts                    layer 2 - grounded framework Q&A
+    generation.ts            layer 3 - draft a document from a description
+    docxEngine.ts            generic corporate-.docx-template filler
+    report.ts                Markdown review memo
+    uploads.ts, sensitive.ts shared upload helpers; local sensitive-data screening
+  utils.ts                   cn() class helper
+content/                     everything programme staff edit
+  frameworks/                the framework corpus (replace with yours)
+  rubrics/                   the scoreable framework, as YAML
+  generation/                generation guides for document types with a bespoke .docx template
+  doc_templates/             the corporate .docx templates generation renders into
+  samples/                   test documents of varying quality
+data/                        generated: index, reports, drafts, credit ledger, users (gitignored)
+scripts/users.mjs            account management CLI (npm run users)
+middleware.ts                sign-in required for every page and API; same-site check on changes
+public/                      static assets (logo)
+```
+
+---
+
+## Limitations
+
+- **It checks documents, not projects.** A well-written proposal for a bad
+  project scores well. This is a completeness and compliance pre-check, not
+  a judgement of merit.
+- **Scanned PDFs need OCR first.** No text layer means nothing to assess.
+- **The rubric is the ceiling.** The system finds what the rubric asks
+  about. Keeping rubrics current is ongoing programme work.
+- **LLM judgements vary a little between runs.** Low temperature keeps this
+  small, and the structural layer is exactly reproducible.
+- **The free tier is not production capacity.** Rate-limited per minute;
+  fine for a team, not for open submission at scale.
+- **Knowledge base text is trusted.** Documents in the knowledge base are
+  given to the model as reference material. A document containing
+  instructions aimed at the model could steer answers — only editors can
+  add documents, so keep the editor role to people who curate them.
+- **Dependency notes.** `@xenova/transformers` (local embeddings) pulls in
+  older `protobufjs`/`sharp` versions flagged by `npm audit`; moving to its
+  successor `@huggingface/transformers` would clear them. A remaining
+  `postcss` advisory needs Next.js 16 and does not affect how this app uses
+  it.

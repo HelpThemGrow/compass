@@ -1,0 +1,353 @@
+# ---------------------------------------------------------------------------
+# Concept Note / Early-Stage Pitch
+#
+# Screening gate before a partner is asked to invest weeks in a full proposal.
+# Deliberately lighter than project_proposal.yaml: it tests whether the idea is
+# inside the mission and worth developing, not whether it is fully worked out.
+# Do not add due-diligence criteria here - that is what the full proposal is for.
+# ---------------------------------------------------------------------------
+
+id: concept_note
+name: Concept Note / Early-Stage Pitch
+version: "1.0"
+description: >-
+  Applies to a short pitch submitted before a full proposal is invited. Tests
+  mission fit, clarity of the problem, plausibility of the approach and whether
+  the partner can credibly deliver it.
+document_types:
+  - concept note
+  - pitch
+  - expression of interest
+  - EOI
+  - preliminary proposal
+  - idea note
+
+sections:
+  - id: summary
+    title: Summary
+    aliases: [Overview, The Idea, Executive Summary, Abstract, Proposal Summary]
+    required: true
+    min_words: 80
+
+  - id: problem
+    title: Problem
+    aliases: [Need, Context, Background, The Challenge, Problem Statement, Rationale]
+    required: true
+    min_words: 100
+
+  - id: approach
+    title: Proposed Approach
+    aliases: [Solution, Intervention, What We Will Do, Our Approach, Activities, Methodology]
+    required: true
+    min_words: 150
+
+  - id: outcomes
+    title: Expected Outcomes
+    aliases: [Intended Results, Impact, What Will Change, Objectives, Goals, Expected Results]
+    required: true
+
+  - id: reach
+    title: Scale and Geography
+    aliases: [Coverage, Target Group, Beneficiaries, Where, Target Population, Reach]
+    required: true
+
+  - id: organisation
+    title: About the Organisation
+    aliases: [Partner Profile, Who We Are, Organisational Background, About Us, Applicant]
+    required: true
+
+  - id: budget
+    title: Indicative Budget
+    aliases: [Budget, Funding Required, Estimated Cost, Financial Ask, Investment Required]
+    required: true
+
+  - id: duration
+    title: Duration
+    aliases: [Timeline, Project Period, Timeframe, Phasing]
+    required: true
+
+checks:
+  - id: CNCHK-ASK
+    description: The funding amount requested is stated
+    type: number_present
+    severity: blocker
+    min_count: 3
+    remedy: State the total amount requested and the period it covers.
+
+  - id: CNCHK-REACH
+    description: The number of beneficiaries is quantified
+    type: pattern
+    severity: blocker
+    pattern: '\d{2,}\s+(children|students|schools|teachers|beneficiaries|villages|families)'
+    min_count: 1
+    remedy: State how many children, schools or teachers the project will reach.
+
+  - id: CNCHK-LEARNING
+    description: Learning outcomes are named as the goal
+    type: keyword_any
+    severity: major
+    terms: [learning outcome, learning level, foundational literacy, numeracy, FLN, reading, comprehension, learning gain, academic outcome]
+    remedy: State the learning outcome this project changes. Enrolment, attendance or infrastructure alone are not learning outcomes.
+
+  - id: CNCHK-GOVT
+    description: Government schools or systems are referenced
+    type: keyword_any
+    severity: major
+    terms: [government school, government, public school, Samagra Shiksha, SCERT, DIET, state, district administration, municipal school]
+    remedy: Confirm whether this operates in government schools, and name the government bodies involved.
+
+  - id: CNCHK-EVIDENCE
+    description: Some evidence base is cited
+    type: keyword_any
+    severity: major
+    terms: [evidence, research, study, pilot, evaluation, data, baseline, ASER, UDISE, NAS, proven]
+    remedy: Cite the evidence that this approach works, whether external research or your own pilot results.
+
+  - id: CNCHK-CONTACT
+    description: Contact details are provided
+    type: pattern
+    severity: minor
+    pattern: '[\w.+-]+@[\w-]+\.[\w.]+|\+91[\s-]?\d{10}|\b\d{10}\b'
+    min_count: 1
+    remedy: Add a named contact person with email and phone number.
+
+dimensions:
+  - id: fit
+    name: Mission Fit
+    weight: 25
+    guidance: >-
+      The screening question. The organisation exists to raise learning levels in government
+      schools by scaling proven solutions. Work that is education-adjacent but does not move
+      learning belongs elsewhere, however worthy it is.
+    criteria:
+      - id: FIT-01
+        requirement: >-
+          The project's primary goal is improved learning outcomes for children, not activity,
+          enrolment or infrastructure with learning assumed to follow.
+        weight: 4
+        critical: true
+        framework_refs: ["Strategy Note, Section 1 - Mission and Scope"]
+        evidence_hints: [learning outcome, learning level, reading, numeracy, FLN, proficiency, improve learning]
+        anchors:
+          4: Learning outcomes are the stated primary goal and the pathway to them is argued.
+          3: Learning is the goal but the pathway is loose.
+          2: Learning is one goal among several unrelated ones.
+          1: Education-adjacent with learning assumed.
+          0: Outside the mission.
+
+      - id: FIT-02
+        requirement: >-
+          The work takes place in or with government schools and systems rather than as a
+          parallel private provision.
+        weight: 3
+        critical: true
+        framework_refs: ["Strategy Note, Section 1.2 - Public System Focus"]
+        evidence_hints: [government school, public school, state system, municipal, department, Samagra Shiksha]
+        anchors:
+          4: Clearly sited in the public system with the entry route described.
+          3: Public system focus stated.
+          2: Mixed public and private.
+          1: Parallel provision with a claimed system link.
+          0: Entirely outside the public system.
+
+      - id: FIT-03
+        requirement: >-
+          The approach has some prior evidence behind it - external research or the partner's
+          own pilot - rather than being untested.
+        weight: 3
+        framework_refs: ["Strategy Note, Section 3 - Scaling Proven Solutions"]
+        evidence_hints: [pilot, evidence, research, evaluated, tested, prior results, study, proven]
+        anchors:
+          4: Specific prior results or research cited with numbers.
+          3: An evidence base referenced credibly.
+          2: General claims that it works.
+          1: Untested but plausible.
+          0: No basis given.
+
+  - id: clarity
+    name: Problem Clarity
+    weight: 20
+    criteria:
+      - id: CLAR-01
+        requirement: >-
+          Names the specific learning gap being addressed and supports it with at least one
+          quantified data point.
+        weight: 3
+        critical: true
+        framework_refs: ["Programme Design Standards, Section 2.1 - Evidence of Need"]
+        evidence_hints: [percentage, baseline, ASER, UDISE, cannot read, below grade level, data shows]
+        anchors:
+          4: A specific gap with a sourced figure for the target geography.
+          3: A specific gap with a figure, source unclear.
+          2: A gap described with a vague number.
+          1: Qualitative description only.
+          0: No problem definition.
+
+      - id: CLAR-02
+        requirement: >-
+          Defines who is affected and where, at least to district and school-type level.
+        weight: 2
+        framework_refs: ["Programme Design Standards, Section 2.2 - Targeting"]
+        evidence_hints: [district, block, grades, government schools, target group, state, cohort]
+        anchors:
+          4: Geography, school type and grade range all specified.
+          3: Geography and one other element.
+          2: State-level only.
+          1: Vague geography.
+          0: Not defined.
+
+      - id: CLAR-03
+        requirement: >-
+          Explains why the gap persists - the underlying cause the project intends to act on,
+          not just its symptoms.
+        weight: 3
+        framework_refs: ["Programme Design Standards, Section 2.3 - Gap Analysis and Root Cause"]
+        evidence_hints: [because, root cause, driver, underlying, reason, persists, why]
+        anchors:
+          4: A credible root-cause argument that the approach then targets.
+          3: Causes identified but loosely connected to the approach.
+          2: Causes asserted.
+          1: Symptoms restated as causes.
+          0: Not addressed.
+
+  - id: approach
+    name: Plausibility of the Approach
+    weight: 25
+    criteria:
+      - id: APP-01
+        requirement: >-
+          Describes what will actually be done in enough detail that a reader can picture a
+          week of the project.
+        weight: 4
+        framework_refs: ["Programme Design Standards, Section 3.3 - Activity Specification"]
+        evidence_hints: [sessions, per week, training, workshops, visits, hours, delivered by, frequency]
+        anchors:
+          4: Concrete activities with actor, frequency and setting.
+          3: Activities described, some specifics missing.
+          2: Activities named only.
+          1: Themes rather than activities.
+          0: Not described.
+
+      - id: APP-02
+        requirement: >-
+          Makes a plausible causal link between the activities and the claimed learning
+          outcome.
+        weight: 4
+        critical: true
+        framework_refs: ["Programme Design Standards, Section 3.1 - Theory of Change"]
+        evidence_hints: [will lead to, because, mechanism, so that, resulting in, theory of change, pathway]
+        anchors:
+          4: The mechanism is explained and stands up to scrutiny.
+          3: A plausible link, lightly argued.
+          2: The link is asserted.
+          1: A large unexplained leap from activity to outcome.
+          0: No link made.
+
+      - id: APP-03
+        requirement: >-
+          Shows awareness of what already exists in that geography and why this adds
+          something rather than duplicating it.
+        weight: 2
+        framework_refs: ["Programme Design Standards, Section 2.3 - Gap Analysis"]
+        evidence_hints: [existing, already, government programme, other organisations, complement, duplicate, unlike]
+        anchors:
+          4: Existing provision mapped and the addition argued.
+          3: Existing provision acknowledged.
+          2: Passing mention.
+          1: Unaware of the landscape.
+          0: Not addressed.
+
+      - id: APP-04
+        requirement: >-
+          Indicates how success would be measured, even if the full measurement plan comes
+          later.
+        weight: 2
+        framework_refs: ["MEL Framework, Section 2 - Indicator Standards"]
+        evidence_hints: [measure, assessment, indicator, we will track, evaluate, baseline, endline]
+        anchors:
+          4: Named indicators and how they would be measured.
+          3: Indicators named.
+          2: Measurement intent stated.
+          1: Passing mention.
+          0: Not addressed.
+
+  - id: capability
+    name: Partner Credibility
+    weight: 15
+    guidance: >-
+      At concept stage this is a plausibility check, not due diligence. Full legal and
+      financial verification happens at the proposal stage.
+    criteria:
+      - id: CAP-01
+        requirement: >-
+          Establishes that the organisation exists, is registered, and has been operating
+          long enough to be assessed.
+        weight: 3
+        framework_refs: ["Partner Due Diligence Policy, Section 1 - Organisational Identity and Registration"]
+        evidence_hints: [registered, founded, established in, since, trust, society, section 8, years of operation]
+        anchors:
+          4: Registration type, year founded and current scale of operations given.
+          3: Registration and history indicated.
+          2: The organisation is described but its standing is unclear.
+          1: Little organisational information.
+          0: None.
+
+      - id: CAP-02
+        requirement: >-
+          Shows relevant delivery experience at a scale comparable to what is proposed.
+        weight: 3
+        framework_refs: ["Partner Due Diligence Policy, Section 4 - Track Record and References"]
+        evidence_hints: [we have worked, previously, reached, experience, currently operating, prior projects]
+        anchors:
+          4: Comparable prior work with scale and results.
+          3: Relevant experience described.
+          2: Experience asserted.
+          1: No comparable experience but capacity claimed.
+          0: No track record given.
+
+  - id: viability
+    name: Scale, Cost and Viability
+    weight: 15
+    criteria:
+      - id: VIA-01
+        requirement: >-
+          States the funding requested, the period it covers, and the number of children
+          or schools reached.
+        weight: 3
+        critical: true
+        framework_refs: ["Financial Policy, Section 1 - The Ask"]
+        evidence_hints: [amount, INR, lakh, crore, requested, total cost, over months, budget, reach]
+        anchors:
+          4: Amount, period and reach all stated.
+          3: Two of the three.
+          2: One of the three.
+          1: A vague indication of size.
+          0: No ask stated.
+
+      - id: VIA-02
+        requirement: >-
+          Implies a cost per child that is defensible - either stated directly or derivable
+          from the ask and the reach.
+        weight: 2
+        framework_refs: ["Financial Policy, Section 3 - Value for Money"]
+        evidence_hints: [cost per child, per beneficiary, unit cost, per school, efficiency]
+        anchors:
+          4: Unit cost stated and reasoned.
+          3: Derivable and reasonable.
+          2: Derivable but looks high or unexplained.
+          1: Cannot be derived.
+          0: No cost information.
+
+      - id: VIA-03
+        requirement: >-
+          Indicates what happens after the funding period - continuation, government adoption,
+          or a defined end.
+        weight: 2
+        framework_refs: ["Government Engagement Protocol, Section 5 - Exit"]
+        evidence_hints: [after, sustain, continue, handover, government adoption, exit, next phase, beyond]
+        anchors:
+          4: A clear post-funding position.
+          3: Sustainability addressed in general terms.
+          2: Mentioned in passing.
+          1: Open-ended dependence implied.
+          0: Not addressed.
