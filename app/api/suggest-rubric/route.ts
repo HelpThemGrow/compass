@@ -1,16 +1,9 @@
 import { NextResponse } from "next/server";
 import fs from "node:fs";
-<<<<<<< HEAD
 import { settings } from "@/lib/server/config";
 import { extract, wordCount } from "@/lib/server/extract";
 import * as rubric from "@/lib/server/rubric";
 import { saveUpload, ApiError } from "@/lib/server/uploads";
-=======
-import { settings } from "@/lib/config";
-import { extract, wordCount } from "@/lib/extract";
-import * as rubric from "@/lib/rubric";
-import { saveUpload, ApiError } from "@/lib/uploads";
->>>>>>> 32f2f75
 
 export async function POST(req: Request) {
   const form = await req.formData();

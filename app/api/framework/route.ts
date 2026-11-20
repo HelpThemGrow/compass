@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import * as ingest from "@/lib/server/ingest";
-=======
-import * as ingest from "@/lib/ingest";
->>>>>>> 32f2f75
 
 export async function GET() {
   // Files added or removed outside the app (e.g. copied into frameworks/) are

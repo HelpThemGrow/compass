@@ -1,9 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-<<<<<<< HEAD
 import { sessionUser } from "@/lib/server/auth";
-=======
-import { sessionUser } from "@/lib/auth";
->>>>>>> 32f2f75
 
 // Every page and API route requires a signed-in user, except the sign-in
 // page itself and the two assets it shows. Editor-only routes additionally

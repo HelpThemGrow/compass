@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import * as ingest from "@/lib/server/ingest";
 import { AuthError, audit, requireUser } from "@/lib/server/auth";
-=======
-import * as ingest from "@/lib/ingest";
-import { AuthError, audit, requireUser } from "@/lib/auth";
->>>>>>> 32f2f75
 
 /** Re-embeds every document from scratch, in the background. */
 export async function POST(req: Request) {

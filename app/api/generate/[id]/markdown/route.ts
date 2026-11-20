@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import * as generation from "@/lib/server/generation";
-=======
-import * as generation from "@/lib/generation";
->>>>>>> 32f2f75
 
 const VALID = /^[0-9a-f]{1,32}$/;
 

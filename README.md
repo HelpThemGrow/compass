@@ -27,38 +27,22 @@ Three layers, same as the original, ported 1:1:
 
 Required sections present, budget tables that add up, unfilled `TBD` /
 `[insert name]` placeholders, registration numbers, safeguarding declarations.
-<<<<<<< HEAD
-Pure parsing (`lib/server/deterministic.ts`) — instant, free, identical every run.
-=======
 Pure parsing (`lib/deterministic.ts`) — instant, free, identical every run.
->>>>>>> 32f2f75
 
 ### Layer 1 — Rubric evaluation with inverted retrieval
 
 The framework is compiled into a **rubric**: versioned, weighted criteria with
-<<<<<<< HEAD
-explicit 0–4 scoring anchors, stored as plain YAML (`content/rubrics/*.yaml`).
-Retrieval runs backwards compared to a chatbot: the corpus is the *submitted
-document*, each query is a *framework criterion*. Every score is anchored to a
-verbatim quote or explicitly marked as having no evidence
-(`lib/server/evaluate.ts`).
-=======
 explicit 0–4 scoring anchors, stored as plain YAML (`rubrics/*.yaml`).
 Retrieval runs backwards compared to a chatbot: the corpus is the *submitted
 document*, each query is a *framework criterion*. Every score is anchored to a
 verbatim quote or explicitly marked as having no evidence
 (`lib/evaluate.ts`).
->>>>>>> 32f2f75
 
 ### Layer 2 — Ask the framework (RAG with whole-document context)
 
 Hybrid retrieval (dense + BM25, fused by Reciprocal Rank Fusion) over the
 knowledge base, with a prompt that refuses to answer from general knowledge
-<<<<<<< HEAD
 (`lib/server/qa.ts`, `lib/server/store.ts`).
-=======
-(`lib/qa.ts`, `lib/store.ts`).
->>>>>>> 32f2f75
 
 Retrieved passages vote for the documents they belong to, and the top
 documents are given to the model **whole** — every section, with headings —
@@ -75,15 +59,9 @@ safely in the chat and streamed as the model writes them.
 
 The inverse of verification: describe a project in a few sentences and get a
 first draft of a Project Charter, Project Proposal, or Concept Note, written
-<<<<<<< HEAD
 section by section against the same framework (`lib/server/generation.ts`). Project
 Charter and Project Proposal fill the organisation's real `.docx` templates
 directly via a hand-rolled OOXML engine (`lib/server/docxEngine.ts`); Concept Note
-=======
-section by section against the same framework (`lib/generation.ts`). Project
-Charter and Project Proposal fill the organisation's real `.docx` templates
-directly via a hand-rolled OOXML engine (`lib/docxEngine.ts`); Concept Note
->>>>>>> 32f2f75
 renders to a generic `.docx` built from scratch.
 
 ---
@@ -213,25 +191,15 @@ status.
 Two directories hold everything organisation-specific — neither requires
 code changes.
 
-<<<<<<< HEAD
 ### `content/frameworks/` — the source documents
-=======
-### `frameworks/` — the source documents
->>>>>>> 32f2f75
 
 Drop in policies, design standards, SOPs and blank templates
 (`.pdf`, `.docx`, `.md`, `.txt`, `.xlsx`, `.csv`; sub-folders fine). This is
 what Q&A answers from and what rubric criteria cite.
 
-<<<<<<< HEAD
 ### `content/rubrics/*.yaml` — the scoreable framework
 
 Each file is one document type — see `content/rubrics/project_proposal.yaml`,
-=======
-### `rubrics/*.yaml` — the scoreable framework
-
-Each file is one document type — see `rubrics/project_proposal.yaml`,
->>>>>>> 32f2f75
 `project_renewal.yaml`, `concept_note.yaml` for the shape: `sections`
 (structural), `checks` (deterministic), `dimensions` → `criteria` (scored,
 with weights, anchors and `framework_refs`). Rubrics reload on save; add a
@@ -239,13 +207,8 @@ new file and it appears in the dropdown.
 
 ### Adding a generated document type with its own template
 
-<<<<<<< HEAD
 Drop the `.docx` in `content/doc_templates/`, write a `content/generation/<type>.yaml`
 describing its sections and tables (see `content/generation/project_charter.yaml`
-=======
-Drop the `.docx` in `doc_templates/`, write a `generation/<type>.yaml`
-describing its sections and tables (see `generation/project_charter.yaml`
->>>>>>> 32f2f75
 for the full shape), and it appears in the document-type list automatically.
 
 ---
@@ -303,17 +266,10 @@ not a private endpoint.
 
 ### Sensitive-data check
 
-<<<<<<< HEAD
 As a safety net, `lib/server/sensitive.ts` screens text **on this server, before
 anything is sent to NVIDIA** — plain pattern checks, so the check itself
 sends nothing anywhere. It runs on knowledge base uploads (and on files
 copied straight into `content/frameworks/`, which are left out of the index),
-=======
-As a safety net, `lib/sensitive.ts` screens text **on this server, before
-anything is sent to NVIDIA** — plain pattern checks, so the check itself
-sends nothing anywhere. It runs on knowledge base uploads (and on files
-copied straight into `frameworks/`, which are left out of the index),
->>>>>>> 32f2f75
 Verify uploads, Ask questions (including earlier turns of the
 conversation), and Generate descriptions.
 
@@ -334,11 +290,7 @@ found and to remove or anonymise it.
 name on its own, a photograph, a table inside a PDF (PDF text loses its
 column layout — records tables are recognised in Word, Excel, CSV,
 Markdown and tab-separated text), or data it has no pattern for. Staff remain responsible for following the rules
-<<<<<<< HEAD
 above. If the rules change, bump `SCREEN_VERSION` in `lib/server/sensitive.ts` so
-=======
-above. If the rules change, bump `SCREEN_VERSION` in `lib/sensitive.ts` so
->>>>>>> 32f2f75
 knowledge base files indexed earlier are screened again.
 
 `.env.local` is gitignored. It holds your API key and session secret — do
@@ -349,7 +301,6 @@ not commit it.
 ## Project layout
 
 ```
-<<<<<<< HEAD
 app/                         routes only
   layout.tsx, page.tsx       root layout (providers) and the single-page entry
   login/                     sign-in page
@@ -390,38 +341,6 @@ data/                        generated: index, reports, drafts, credit ledger, u
 scripts/users.mjs            account management CLI (npm run users)
 middleware.ts                sign-in required for every page and API; same-site check on changes
 public/                      static assets (logo)
-=======
-app/
-  layout.tsx, page.tsx, globals.css   the single-page UI shell
-  api/                                Route Handlers - one per Python main.py endpoint
-lib/
-  config.ts          settings, all env-overridable
-  llm.ts             NVIDIA client: rate limiting, credit ledger
-  embeddings.ts       pluggable embedders (local ONNX / NVIDIA / hash) + reranker
-  extract.ts          pdf, docx, xlsx, csv, md, txt -> text + heading outline
-  chunking.ts         structure-aware chunking with overlap
-  store.ts            vector store + BM25, fused by RRF
-  ingest.ts           framework library indexing
-  rubric.ts           rubric model, YAML loader, auto-detection
-  deterministic.ts    layer 0 - checks that need no model
-  evaluate.ts         layer 1 - inverted retrieval + rubric judging
-  qa.ts               layer 2 - grounded framework Q&A
-  generation.ts       layer 3 - draft a document from a description
-  docxEngine.ts        generic corporate-.docx-template filler
-  report.ts           Markdown review memo
-  uploads.ts           shared upload helpers
-  auth.ts              accounts, password checks, signed session cookies, audit log
-  sensitive.ts         local sensitive-data screening (Aadhaar, cards, credentials, records tables)
-middleware.ts          sign-in required for every page and API; same-site check on changes
-scripts/users.mjs      account management CLI (npm run users)
-public/app.js          UI logic (fetch calls against the Route Handlers above)
-frameworks/            the framework corpus (replace with yours)
-rubrics/                the scoreable framework, as YAML
-generation/             generation guides for document types with a bespoke .docx template
-doc_templates/          the actual corporate .docx templates generation renders into
-samples/                test documents of varying quality
-data/                   generated: index, reports, generated drafts, credit ledger (gitignored)
->>>>>>> 32f2f75
 ```
 
 ---

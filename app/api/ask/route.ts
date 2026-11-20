@@ -1,15 +1,8 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import * as qa from "@/lib/server/qa";
 import * as llm from "@/lib/server/llm";
 import * as sensitive from "@/lib/server/sensitive";
 import { audit, sessionUser } from "@/lib/server/auth";
-=======
-import * as qa from "@/lib/qa";
-import * as llm from "@/lib/llm";
-import * as sensitive from "@/lib/sensitive";
-import { audit, sessionUser } from "@/lib/auth";
->>>>>>> 32f2f75
 
 export const maxDuration = 300;
 

@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-<<<<<<< HEAD
 import * as rubric from "@/lib/server/rubric";
-=======
-import * as rubric from "@/lib/rubric";
->>>>>>> 32f2f75
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
